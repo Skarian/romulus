@@ -41,8 +41,7 @@ fun SettingsScreen(
     onSetLocalSource: suspend (Uri) -> ValidationResult,
     onSetDirectory: suspend (Uri) -> Unit,
     onSetConcurrency: suspend (Int) -> Unit,
-    onManualRefresh: suspend () -> Unit,
-    onOpenSpike: (() -> Unit)? = null
+    onManualRefresh: suspend () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var apiKey by remember { mutableStateOf("") }
@@ -209,12 +208,6 @@ fun SettingsScreen(
 
         TextButton(onClick = { scope.launch { onManualRefresh() } }) {
             Text("Manual JSON refresh")
-        }
-
-        if (onOpenSpike != null) {
-            TextButton(onClick = onOpenSpike) {
-                Text("Open Ketch spike")
-            }
         }
 
         if (!message.isNullOrBlank()) {

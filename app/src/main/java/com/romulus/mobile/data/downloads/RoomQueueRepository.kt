@@ -93,6 +93,10 @@ class RoomQueueRepository(
         updateRunCounters(task.runId)
     }
 
+    override suspend fun updateTaskProgress(task: DownloadTaskEntity) {
+        taskDao.upsert(task)
+    }
+
     override suspend fun clearTerminalHistory() {
         taskDao.deleteByStates(listOf(DownloadState.COMPLETED, DownloadState.FAILED, DownloadState.CANCELLED))
         runDao.findLatestRun()?.let { updateRunCounters(it.runId) }

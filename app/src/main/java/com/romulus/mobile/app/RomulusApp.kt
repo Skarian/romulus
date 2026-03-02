@@ -47,7 +47,6 @@ import com.romulus.mobile.domain.source.SourceEntry
 import com.romulus.mobile.domain.source.SourceMode
 import com.romulus.mobile.domain.source.SourceSnapshot
 import com.romulus.mobile.feature.downloads.DownloadsScreen
-import com.romulus.mobile.feature.downloads.spike.KetchSpikeScreen
 import com.romulus.mobile.feature.files.FilesScreen
 import com.romulus.mobile.feature.home.HomeScreen
 import com.romulus.mobile.feature.settings.SettingsScreen
@@ -292,11 +291,6 @@ fun RomulusApp(initialRoute: String? = null) {
                             },
                             onManualRefresh = {
                                 appContainer.sourceRepository.refreshFromUrlOnColdLaunchIfNeeded()
-                            },
-                            onOpenSpike = {
-                                navController.navigate(Routes.SPIKE) {
-                                    launchSingleTop = true
-                                }
                             }
                         )
                     }
@@ -333,12 +327,6 @@ fun RomulusApp(initialRoute: String? = null) {
                         )
                     }
 
-                    composable(Routes.SPIKE) {
-                        KetchSpikeScreen(
-                            ketch = appContainer.ketch,
-                            safFileStore = appContainer.safFileStore
-                        )
-                    }
                 }
             }
         }
@@ -410,5 +398,4 @@ private object Routes {
     const val DOWNLOADS = "downloads"
     const val SETTINGS = "settings"
     const val FILES = "files"
-    const val SPIKE = "spike"
 }

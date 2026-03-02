@@ -54,9 +54,3 @@ data class UnrestrictedLinkDto(
     @SerialName("filesize")
     val fileSize: Long? = null
 )
-
-@Serializable
-data class UnrestrictLinkRequest(
-    @SerialName("link")
-    val link: String
-)

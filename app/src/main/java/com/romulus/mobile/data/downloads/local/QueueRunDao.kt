@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface QueueRunDao {
@@ -16,7 +15,4 @@ interface QueueRunDao {
 
     @Query("SELECT * FROM queue_runs ORDER BY startedAtEpochMs DESC LIMIT 1")
     suspend fun findLatestRun(): QueueRunEntity?
-
-    @Query("SELECT * FROM queue_runs ORDER BY startedAtEpochMs DESC LIMIT 1")
-    fun observeLatestRun(): Flow<QueueRunEntity?>
 }

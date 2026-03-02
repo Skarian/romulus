@@ -42,7 +42,7 @@ After setup, bottom navigation routes are:
 
 - `Home`: validated source catalog, cold-launch URL refresh, and manual refresh.
 - `Downloads`: queue states, controls, details, and clear terminal history.
-- `Settings`: credential/source/directory edits, concurrency, manual refresh, and Ketch spike entrypoint.
+- `Settings`: credential/source/directory edits, concurrency, and manual refresh.
 
 ## Build and Verification
 
@@ -81,7 +81,6 @@ The app intentionally keeps a small dependency surface:
 - Room for persisted queue/history state.
 - DataStore for non-sensitive settings.
 - Retrofit/OkHttp + Kotlin serialization for Real-Debrid HTTP integration.
-- Ketch for transfer-engine controls (pause/resume/cancel/retry/restart).
 
 ## Known Limitations
 

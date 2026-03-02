@@ -62,12 +62,6 @@ class PreferencesSettingsRepository(
         }
     }
 
-    override suspend fun clearApiKey() {
-        dataStore.edit { prefs ->
-            prefs.remove(Keys.ENCRYPTED_API_KEY)
-        }
-    }
-
     override suspend fun readApiKey(): String? {
         val encrypted = settings.first().encryptedApiKey ?: return null
         return runCatching { apiKeyCipher.decrypt(encrypted) }
@@ -90,16 +84,6 @@ class PreferencesSettingsRepository(
             } else {
                 prefs[Keys.SOURCE_LAST_REFRESH_EPOCH_MS] = lastRefreshEpochMs
             }
-        }
-    }
-
-    override suspend fun clearSource() {
-        dataStore.edit { prefs ->
-            prefs.remove(Keys.SOURCE_MODE)
-            prefs.remove(Keys.SOURCE_VALUE)
-            prefs.remove(Keys.SOURCE_SNAPSHOT_ID)
-            prefs[Keys.SOURCE_IS_STALE] = false
-            prefs.remove(Keys.SOURCE_LAST_REFRESH_EPOCH_MS)
         }
     }
 

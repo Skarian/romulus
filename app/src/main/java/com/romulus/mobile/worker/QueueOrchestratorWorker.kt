@@ -282,14 +282,17 @@ class QueueOrchestratorWorker(
             return true
         }
 
-        queueRepository.updateTask(
-            latest.copy(
-                state = nextState,
-                updatedAtEpochMs = clockProvider.nowEpochMillis(),
-                bytesDownloaded = normalizedBytes,
-                totalBytes = normalizedTotal
-            )
+        val updatedTask = latest.copy(
+            state = nextState,
+            updatedAtEpochMs = clockProvider.nowEpochMillis(),
+            bytesDownloaded = normalizedBytes,
+            totalBytes = normalizedTotal
         )
+        if (latest.state == nextState) {
+            queueRepository.updateTaskProgress(updatedTask)
+        } else {
+            queueRepository.updateTask(updatedTask)
+        }
         return true
     }
 
@@ -385,7 +388,11 @@ class QueueOrchestratorWorker(
         taskProgressTracker.remove(taskId)
         val latest = queueRepository.findTask(taskId) ?: return null
         if (!isActionable(latest)) return null
-        val nextAttempt = if (latest.state == DownloadState.RETRYING || latest.attemptCount == 0) {
+        val nextAttempt = if (
+            latest.state == DownloadState.RETRYING ||
+            latest.state == DownloadState.RETRY_SCHEDULED ||
+            latest.attemptCount == 0
+        ) {
             latest.attemptCount + 1
         } else {
             latest.attemptCount

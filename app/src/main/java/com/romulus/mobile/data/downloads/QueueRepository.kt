@@ -32,6 +32,8 @@ interface QueueRepository {
 
     suspend fun updateTask(task: DownloadTaskEntity)
 
+    suspend fun updateTaskProgress(task: DownloadTaskEntity)
+
     suspend fun clearTerminalHistory()
 
     suspend fun activeCount(): Int

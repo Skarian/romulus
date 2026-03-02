@@ -7,12 +7,10 @@ interface SettingsRepository {
     val settings: Flow<AppSettings>
 
     suspend fun saveApiKey(rawApiKey: String)
-    suspend fun clearApiKey()
     suspend fun readApiKey(): String?
 
     suspend fun setSource(mode: SourceMode, value: String, snapshotId: String)
     suspend fun setSourceFreshness(isStale: Boolean, lastRefreshEpochMs: Long?)
-    suspend fun clearSource()
 
     suspend fun setDownloadDirectoryUri(uri: String)
 

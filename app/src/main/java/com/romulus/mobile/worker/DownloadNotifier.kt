@@ -9,6 +9,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -46,7 +47,11 @@ class DownloadNotifier(
 
     fun foregroundInfo(counter: QueueRunCounter): ForegroundInfo {
         val notification = progressNotification(counter)
-        return ForegroundInfo(PROGRESS_NOTIFICATION_ID, notification)
+        return ForegroundInfo(
+            PROGRESS_NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        )
     }
 
     @SuppressLint("MissingPermission")
