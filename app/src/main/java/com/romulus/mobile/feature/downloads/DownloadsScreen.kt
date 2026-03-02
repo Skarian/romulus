@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,8 +34,7 @@ fun DownloadsScreen(
     onCancel: (String) -> Unit,
     onPause: (String) -> Unit,
     onResume: (String) -> Unit,
-    onDeletePartial: (String) -> Unit,
-    onClearCompleted: () -> Unit
+    onDeletePartial: (String) -> Unit
 ) {
     val active = tasks.filter { it.state.isActive }
     val terminal = tasks.filter { it.state.isTerminal }
@@ -68,15 +66,7 @@ fun DownloadsScreen(
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(text = "Completed", style = MaterialTheme.typography.titleLarge)
-            Button(onClick = onClearCompleted, enabled = terminal.isNotEmpty()) {
-                Text("Clear completed")
-            }
-        }
+        Text(text = "Completed", style = MaterialTheme.typography.titleLarge)
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
             items(terminal, key = { it.id }) { task ->

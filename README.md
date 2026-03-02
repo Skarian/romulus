@@ -56,8 +56,8 @@ After setup, bottom navigation routes are:
 ## Package Structure
 
 - `app/`: Compose app shell, navigation, setup gating.
-- `core/`: shared primitives and helpers (validation, filenames, error mapping, clock).
-- `data/`: settings storage, source ingestion, Real-Debrid client, queue persistence.
+- `core/`: shared primitives and helpers (validation, filenames, clock).
+- `data/`: settings storage, source ingestion, Real-Debrid client, queue persistence, runtime queue state.
 - `domain/`: business models and transformations.
 - `feature/`: setup, home, file selection, downloads, settings UI.
 - `worker/`: queue orchestration, notifications, background execution.
@@ -65,6 +65,7 @@ After setup, bottom navigation routes are:
 ## Operational Notes
 
 - Queue states are persisted in Room and survive process restarts.
+- Queue uses split state lanes: Room for durable lifecycle state and in-memory runtime store for high-frequency progress/control updates.
 - Notification permission is requested at runtime on Android 13+.
 - Queue progress notification uses `x/x completed` and appends failed count when needed.
 - Completion notification posts when active count transitions to zero.

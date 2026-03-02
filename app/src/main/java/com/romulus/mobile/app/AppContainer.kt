@@ -5,9 +5,10 @@ import androidx.room.Room
 import com.romulus.mobile.core.files.FilenameCollisionResolver
 import com.romulus.mobile.core.time.ClockProvider
 import com.romulus.mobile.core.time.SystemClockProvider
+import com.romulus.mobile.data.downloads.QueueCommandBus
+import com.romulus.mobile.data.downloads.QueueRuntimeStore
 import com.romulus.mobile.data.downloads.HttpTransferEngine
 import com.romulus.mobile.data.downloads.RoomQueueRepository
-import com.romulus.mobile.data.downloads.TaskProgressTracker
 import com.romulus.mobile.data.downloads.local.RomulusDatabase
 import com.romulus.mobile.data.files.FileSelectionRepository
 import com.romulus.mobile.data.files.SafFileStore
@@ -30,12 +31,16 @@ class AppContainer(
     val fileSelectionRepository = FileSelectionRepository(realDebridClient)
     val safFileStore = SafFileStore(appContext, filenameCollisionResolver)
     val transferEngine = HttpTransferEngine(OkHttpClient(), safFileStore)
-    val taskProgressTracker = TaskProgressTracker()
+    val queueRuntimeStore = QueueRuntimeStore()
+    val queueCommandBus = QueueCommandBus()
     val database: RomulusDatabase = Room.databaseBuilder(
         appContext,
         RomulusDatabase::class.java,
         "romulus.db"
-    ).addMigrations(RomulusDatabase.MIGRATION_1_2).build()
+    )
+        .fallbackToDestructiveMigration(dropAllTables = true)
+        .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+        .build()
     val queueRepository = RoomQueueRepository(
         taskDao = database.downloadTaskDao(),
         runDao = database.queueRunDao(),
@@ -45,6 +50,7 @@ class AppContainer(
         context = appContext,
         queueRepository = queueRepository,
         safFileStore = safFileStore,
-        taskProgressTracker = taskProgressTracker
+        queueRuntimeStore = queueRuntimeStore,
+        queueCommandBus = queueCommandBus
     )
 }

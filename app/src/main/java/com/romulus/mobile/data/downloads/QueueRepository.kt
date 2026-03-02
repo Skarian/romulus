@@ -1,8 +1,6 @@
 package com.romulus.mobile.data.downloads
 
 import com.romulus.mobile.data.downloads.local.DownloadTaskEntity
-import com.romulus.mobile.domain.downloads.DownloadState
-import com.romulus.mobile.domain.downloads.QueueRunCounter
 import kotlinx.coroutines.flow.Flow
 
 data class QueuedDownload(
@@ -19,12 +17,21 @@ data class QueuedDownload(
     val partName: String?
 )
 
+data class QueueRunSummary(
+    val runId: String,
+    val totalCount: Int
+)
+
 interface QueueRepository {
     fun observeTasks(): Flow<List<DownloadTaskEntity>>
+
+    suspend fun findAllTasks(): List<DownloadTaskEntity>
 
     suspend fun enqueue(items: List<QueuedDownload>): List<DownloadTaskEntity>
 
     suspend fun findTask(id: String): DownloadTaskEntity?
+
+    suspend fun findLatestRunSummary(): QueueRunSummary?
 
     suspend fun findActiveTasks(): List<DownloadTaskEntity>
 
@@ -32,13 +39,14 @@ interface QueueRepository {
 
     suspend fun updateTask(task: DownloadTaskEntity)
 
-    suspend fun updateTaskProgress(task: DownloadTaskEntity)
-
-    suspend fun clearTerminalHistory()
+    suspend fun updateTaskCheckpoint(
+        taskId: String,
+        bytesDownloaded: Long,
+        totalBytes: Long?,
+        updatedAtEpochMs: Long
+    )
 
     suspend fun activeCount(): Int
-
-    suspend fun latestRunCounter(): QueueRunCounter
 
     suspend fun closeRunIfNoActive()
 }

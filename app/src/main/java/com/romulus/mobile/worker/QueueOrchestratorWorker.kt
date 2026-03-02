@@ -3,10 +3,12 @@ package com.romulus.mobile.worker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.romulus.mobile.app.RomulusApplication
+import com.romulus.mobile.data.downloads.QueueTaskCommand
 import com.romulus.mobile.data.downloads.TransferDirective
 import com.romulus.mobile.data.downloads.TransferResult
 import com.romulus.mobile.data.downloads.local.DownloadTaskEntity
 import com.romulus.mobile.data.realdebrid.FileRematchException
+import com.romulus.mobile.data.realdebrid.TorrentNotReadyException
 import com.romulus.mobile.data.realdebrid.TorrentTerminalStateException
 import com.romulus.mobile.domain.downloads.DownloadState
 import kotlinx.coroutines.async
@@ -27,13 +29,18 @@ class QueueOrchestratorWorker(
     private val realDebridClient = appContainer.realDebridClient
     private val safFileStore = appContainer.safFileStore
     private val transferEngine = appContainer.transferEngine
-    private val taskProgressTracker = appContainer.taskProgressTracker
+    private val queueRuntimeStore = appContainer.queueRuntimeStore
+    private val queueCommandBus = appContainer.queueCommandBus
     private val clockProvider = appContainer.clockProvider
     private val notifier = DownloadNotifier(applicationContext)
 
     override suspend fun doWork(): Result {
         notifier.ensureChannels()
-        setForeground(notifier.foregroundInfo(queueRepository.latestRunCounter()))
+        queueRuntimeStore.syncTasks(
+            tasks = queueRepository.findAllTasks(),
+            runSummary = queueRepository.findLatestRunSummary()
+        )
+        setForeground(notifier.foregroundInfo(queueRuntimeStore.latestRunCounter()))
         recoverInterruptedTasks()
 
         while (true) {
@@ -44,15 +51,19 @@ class QueueOrchestratorWorker(
             if (runnable.isEmpty()) {
                 if (activeCount == 0) {
                     queueRepository.closeRunIfNoActive()
-                    val counter = queueRepository.latestRunCounter()
+                    queueRuntimeStore.syncTasks(
+                        tasks = queueRepository.findAllTasks(),
+                        runSummary = queueRepository.findLatestRunSummary()
+                    )
+                    val counter = queueRuntimeStore.latestRunCounter()
                     if (counter.totalCount > 0) {
                         notifier.cancelProgress()
                         notifier.showCompletion(counter)
                     }
                     return Result.success()
                 }
-                notifier.showProgress(queueRepository.latestRunCounter())
-                delay(1_000L)
+                notifier.showProgress(queueRuntimeStore.latestRunCounter())
+                delay(IDLE_LOOP_DELAY_MS)
                 continue
             }
 
@@ -63,14 +74,15 @@ class QueueOrchestratorWorker(
                     }
                 }.awaitAll()
             }
-            notifier.showProgress(queueRepository.latestRunCounter())
-            delay(300)
+            notifier.showProgress(queueRuntimeStore.latestRunCounter())
+            delay(ACTIVE_LOOP_DELAY_MS)
         }
     }
 
     private suspend fun processTask(taskId: String) {
         val current = transitionToResolving(taskId) ?: return
         if (!isActionable(current)) return
+        queueCommandBus.clear(taskId)
 
         val apiKey = settingsRepository.readApiKey()
         if (apiKey.isNullOrBlank()) {
@@ -103,7 +115,7 @@ class QueueOrchestratorWorker(
                 return
             }
             val reason = when (throwable) {
-                is com.romulus.mobile.data.realdebrid.TorrentNotReadyException -> "Torrent not ready"
+                is TorrentNotReadyException -> "Torrent not ready"
                 is TorrentTerminalStateException -> throwable.message ?: "Torrent cannot be downloaded"
                 is FileRematchException -> throwable.message ?: "Selected file no longer matches source entry"
                 else -> throwable.message ?: "Unable to resolve download link"
@@ -142,7 +154,7 @@ class QueueOrchestratorWorker(
         if (!isActionable(runTask)) return
         val resumeFromBytes = runTask.bytesDownloaded.coerceAtLeast(0L)
         val resolvedTotalBytes = unrestrictedLink.fileSize ?: runTask.totalBytes
-        queueRepository.updateTask(
+        persistTask(
             runTask.copy(
                 state = DownloadState.RUNNING,
                 updatedAtEpochMs = clockProvider.nowEpochMillis(),
@@ -156,9 +168,11 @@ class QueueOrchestratorWorker(
         var lastProgressUiEpochMs = 0L
         var lastProgressPersistEpochMs = 0L
         var lastProgressNotificationEpochMs = 0L
-        var lastDirectiveCheckEpochMs = 0L
-        var latestDirective = TransferDirective.CONTINUE
-        taskProgressTracker.update(taskId, latestProgressBytes, latestProgressTotalBytes)
+        var lastDirectiveDbCheckEpochMs = 0L
+        var lastPersistedBytes = resumeFromBytes
+        var lastPersistedTotalBytes = resolvedTotalBytes
+
+        queueRuntimeStore.updateLiveProgress(taskId, latestProgressBytes, latestProgressTotalBytes)
 
         val transferResult = transferEngine.transfer(
             downloadUrl = unrestrictedLink.downloadUrl,
@@ -173,49 +187,62 @@ class QueueOrchestratorWorker(
                 } == true
 
                 if (reachedTerminalBytes || nowEpochMs - lastProgressUiEpochMs >= PROGRESS_UI_THROTTLE_MS) {
-                    taskProgressTracker.update(taskId, latestProgressBytes, latestProgressTotalBytes)
+                    queueRuntimeStore.updateLiveProgress(taskId, latestProgressBytes, latestProgressTotalBytes)
                     lastProgressUiEpochMs = nowEpochMs
                 }
 
-                if (reachedTerminalBytes || nowEpochMs - lastProgressPersistEpochMs >= PROGRESS_PERSIST_THROTTLE_MS) {
-                    val persisted = persistProgress(
+                val bytesDelta = latestProgressBytes - lastPersistedBytes
+                val shouldPersistCheckpoint = reachedTerminalBytes ||
+                    nowEpochMs - lastProgressPersistEpochMs >= PROGRESS_CHECKPOINT_INTERVAL_MS ||
+                    bytesDelta >= PROGRESS_CHECKPOINT_DELTA_BYTES ||
+                    latestProgressTotalBytes != lastPersistedTotalBytes
+
+                if (shouldPersistCheckpoint) {
+                    queueRepository.updateTaskCheckpoint(
                         taskId = taskId,
                         bytesDownloaded = latestProgressBytes,
                         totalBytes = latestProgressTotalBytes,
-                        markRunning = true
+                        updatedAtEpochMs = nowEpochMs
                     )
-                    if (persisted && (reachedTerminalBytes || nowEpochMs - lastProgressNotificationEpochMs >= PROGRESS_NOTIFY_THROTTLE_MS)) {
-                        notifier.showProgress(queueRepository.latestRunCounter())
-                        lastProgressNotificationEpochMs = nowEpochMs
-                    }
+                    lastPersistedBytes = latestProgressBytes
+                    lastPersistedTotalBytes = latestProgressTotalBytes
                     lastProgressPersistEpochMs = nowEpochMs
+                }
+
+                if (reachedTerminalBytes || nowEpochMs - lastProgressNotificationEpochMs >= PROGRESS_NOTIFY_THROTTLE_MS) {
+                    notifier.showProgress(queueRuntimeStore.latestRunCounter())
+                    lastProgressNotificationEpochMs = nowEpochMs
                 }
             },
             resolveDirective = {
+                when (queueCommandBus.read(taskId)) {
+                    QueueTaskCommand.PAUSE -> return@transfer TransferDirective.PAUSE
+                    QueueTaskCommand.CANCEL -> return@transfer TransferDirective.CANCEL
+                    null -> Unit
+                }
                 val nowEpochMs = clockProvider.nowEpochMillis()
-                if (nowEpochMs - lastDirectiveCheckEpochMs >= DIRECTIVE_POLL_THROTTLE_MS ||
-                    latestDirective != TransferDirective.CONTINUE
-                ) {
+                if (nowEpochMs - lastDirectiveDbCheckEpochMs >= DIRECTIVE_DB_CHECK_THROTTLE_MS) {
                     val taskWithState = queueRepository.findTask(taskId) ?: return@transfer TransferDirective.CANCEL
-                    latestDirective = when {
+                    lastDirectiveDbCheckEpochMs = nowEpochMs
+                    return@transfer when {
                         taskWithState.state == DownloadState.PAUSED -> TransferDirective.PAUSE
                         taskWithState.state == DownloadState.CANCELLED -> TransferDirective.CANCEL
                         !taskWithState.state.isActive -> TransferDirective.CANCEL
                         else -> TransferDirective.CONTINUE
                     }
-                    lastDirectiveCheckEpochMs = nowEpochMs
                 }
-                latestDirective
+                TransferDirective.CONTINUE
             }
         )
 
-        persistProgress(
+        queueRepository.updateTaskCheckpoint(
             taskId = taskId,
             bytesDownloaded = latestProgressBytes,
             totalBytes = latestProgressTotalBytes,
-            markRunning = false
+            updatedAtEpochMs = clockProvider.nowEpochMillis()
         )
-        taskProgressTracker.remove(taskId)
+        queueCommandBus.clear(taskId)
+        queueRuntimeStore.clearLiveProgress(taskId)
 
         when (transferResult) {
             TransferResult.Success -> {
@@ -223,7 +250,7 @@ class QueueOrchestratorWorker(
                 if (latest.state == DownloadState.CANCELLED || latest.state == DownloadState.PAUSED) {
                     return
                 }
-                queueRepository.updateTask(
+                persistTask(
                     latest.copy(
                         state = DownloadState.COMPLETED,
                         updatedAtEpochMs = clockProvider.nowEpochMillis(),
@@ -262,45 +289,18 @@ class QueueOrchestratorWorker(
         }
     }
 
-    private suspend fun persistProgress(
-        taskId: String,
-        bytesDownloaded: Long,
-        totalBytes: Long?,
-        markRunning: Boolean
-    ): Boolean {
-        val latest = queueRepository.findTask(taskId) ?: return false
-        if (markRunning && !isActionable(latest)) return false
-        val normalizedBytes = maxOf(latest.bytesDownloaded, bytesDownloaded.coerceAtLeast(0L))
-        val normalizedTotal = totalBytes ?: latest.totalBytes
-        val nextState = if (markRunning) DownloadState.RUNNING else latest.state
-
-        if (
-            latest.state == nextState &&
-            latest.bytesDownloaded == normalizedBytes &&
-            latest.totalBytes == normalizedTotal
-        ) {
-            return true
-        }
-
-        val updatedTask = latest.copy(
-            state = nextState,
-            updatedAtEpochMs = clockProvider.nowEpochMillis(),
-            bytesDownloaded = normalizedBytes,
-            totalBytes = normalizedTotal
-        )
-        if (latest.state == nextState) {
-            queueRepository.updateTaskProgress(updatedTask)
-        } else {
-            queueRepository.updateTask(updatedTask)
-        }
-        return true
+    private suspend fun persistTask(task: DownloadTaskEntity) {
+        queueRepository.updateTask(task)
+        queueRuntimeStore.upsertTask(task)
+        queueRuntimeStore.syncLatestRunSummary(queueRepository.findLatestRunSummary())
     }
 
     private suspend fun failWithAuthRequired() {
         val activeTasks = queueRepository.findActiveTasks()
         activeTasks.forEach { task ->
-            taskProgressTracker.remove(task.id)
-            queueRepository.updateTask(
+            queueCommandBus.clear(task.id)
+            queueRuntimeStore.clearLiveProgress(task.id)
+            persistTask(
                 task.copy(
                     state = DownloadState.FAILED,
                     updatedAtEpochMs = clockProvider.nowEpochMillis(),
@@ -317,7 +317,8 @@ class QueueOrchestratorWorker(
         retryable: Boolean,
         partialExists: Boolean
     ) {
-        taskProgressTracker.remove(taskId)
+        queueCommandBus.clear(taskId)
+        queueRuntimeStore.clearLiveProgress(taskId)
         val current = queueRepository.findTask(taskId) ?: return
         if (current.state == DownloadState.CANCELLED || current.state == DownloadState.PAUSED) return
 
@@ -331,7 +332,7 @@ class QueueOrchestratorWorker(
             } + (0L..2_000L).random()
             val retryAt = clockProvider.nowEpochMillis() + delayMs
             val retryState = if (delayMs == 0L) DownloadState.RETRYING else DownloadState.RETRY_SCHEDULED
-            queueRepository.updateTask(
+            persistTask(
                 current.copy(
                     state = retryState,
                     updatedAtEpochMs = clockProvider.nowEpochMillis(),
@@ -343,7 +344,7 @@ class QueueOrchestratorWorker(
             return
         }
 
-        queueRepository.updateTask(
+        persistTask(
             current.copy(
                 state = DownloadState.FAILED,
                 updatedAtEpochMs = clockProvider.nowEpochMillis(),
@@ -355,9 +356,10 @@ class QueueOrchestratorWorker(
     }
 
     private suspend fun markPaused(taskId: String, bytesDownloaded: Long, totalBytes: Long?) {
-        taskProgressTracker.remove(taskId)
+        queueCommandBus.clear(taskId)
+        queueRuntimeStore.clearLiveProgress(taskId)
         val latest = queueRepository.findTask(taskId) ?: return
-        queueRepository.updateTask(
+        persistTask(
             latest.copy(
                 state = DownloadState.PAUSED,
                 updatedAtEpochMs = clockProvider.nowEpochMillis(),
@@ -370,9 +372,10 @@ class QueueOrchestratorWorker(
     }
 
     private suspend fun markCancelled(taskId: String, bytesDownloaded: Long, totalBytes: Long?) {
-        taskProgressTracker.remove(taskId)
+        queueCommandBus.clear(taskId)
+        queueRuntimeStore.clearLiveProgress(taskId)
         val latest = queueRepository.findTask(taskId) ?: return
-        queueRepository.updateTask(
+        persistTask(
             latest.copy(
                 state = DownloadState.CANCELLED,
                 updatedAtEpochMs = clockProvider.nowEpochMillis(),
@@ -385,7 +388,7 @@ class QueueOrchestratorWorker(
     }
 
     private suspend fun transitionToResolving(taskId: String): DownloadTaskEntity? {
-        taskProgressTracker.remove(taskId)
+        queueCommandBus.clear(taskId)
         val latest = queueRepository.findTask(taskId) ?: return null
         if (!isActionable(latest)) return null
         val nextAttempt = if (
@@ -405,7 +408,8 @@ class QueueOrchestratorWorker(
             retryAtEpochMs = null,
             lastFailureReason = null
         )
-        queueRepository.updateTask(next)
+        persistTask(next)
+        queueRuntimeStore.updateLiveProgress(taskId, next.bytesDownloaded, next.totalBytes)
         return next
     }
 
@@ -419,8 +423,9 @@ class QueueOrchestratorWorker(
                 else -> task.state
             }
             if (recoveredState != task.state) {
-                taskProgressTracker.remove(task.id)
-                queueRepository.updateTask(
+                queueCommandBus.clear(task.id)
+                queueRuntimeStore.clearLiveProgress(task.id)
+                persistTask(
                     task.copy(
                         state = recoveredState,
                         retryAtEpochMs = null,
@@ -438,8 +443,11 @@ class QueueOrchestratorWorker(
 
     companion object {
         private const val PROGRESS_UI_THROTTLE_MS = 120L
-        private const val PROGRESS_PERSIST_THROTTLE_MS = 1_500L
         private const val PROGRESS_NOTIFY_THROTTLE_MS = 750L
-        private const val DIRECTIVE_POLL_THROTTLE_MS = 150L
+        private const val PROGRESS_CHECKPOINT_INTERVAL_MS = 3_000L
+        private const val PROGRESS_CHECKPOINT_DELTA_BYTES = 512L * 1024L
+        private const val DIRECTIVE_DB_CHECK_THROTTLE_MS = 1_500L
+        private const val ACTIVE_LOOP_DELAY_MS = 300L
+        private const val IDLE_LOOP_DELAY_MS = 1_000L
     }
 }

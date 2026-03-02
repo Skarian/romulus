@@ -12,7 +12,15 @@ interface DownloadTaskDao {
     @Query(
         """
         SELECT * FROM download_tasks
-        ORDER BY createdAtEpochMs DESC, entryIndex ASC, partIndex ASC, id ASC
+        ORDER BY queueIndex ASC, id ASC
+        """
+    )
+    suspend fun findAll(): List<DownloadTaskEntity>
+
+    @Query(
+        """
+        SELECT * FROM download_tasks
+        ORDER BY queueIndex ASC, id ASC
         """
     )
     fun observeAll(): Flow<List<DownloadTaskEntity>>
@@ -21,10 +29,13 @@ interface DownloadTaskDao {
         """
         SELECT * FROM download_tasks
         WHERE state IN (:states)
-        ORDER BY createdAtEpochMs ASC, entryIndex ASC, partIndex ASC, id ASC
+        ORDER BY queueIndex ASC, id ASC
         """
     )
     suspend fun findByStates(states: List<DownloadState>): List<DownloadTaskEntity>
+
+    @Query("SELECT MAX(queueIndex) FROM download_tasks")
+    suspend fun findMaxQueueIndex(): Long?
 
     @Query("SELECT COUNT(*) FROM download_tasks WHERE state IN (:states)")
     suspend fun countByStates(states: List<DownloadState>): Int
@@ -41,6 +52,23 @@ interface DownloadTaskDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(tasks: List<DownloadTaskEntity>)
 
-    @Query("DELETE FROM download_tasks WHERE state IN (:states)")
-    suspend fun deleteByStates(states: List<DownloadState>)
+    @Query(
+        """
+        UPDATE download_tasks
+        SET bytesDownloaded = CASE
+            WHEN bytesDownloaded > :bytesDownloaded THEN bytesDownloaded
+            ELSE :bytesDownloaded
+        END,
+            totalBytes = COALESCE(:totalBytes, totalBytes),
+            updatedAtEpochMs = :updatedAtEpochMs
+        WHERE id = :taskId
+        """
+    )
+    suspend fun updateCheckpoint(
+        taskId: String,
+        bytesDownloaded: Long,
+        totalBytes: Long?,
+        updatedAtEpochMs: Long
+    )
+
 }

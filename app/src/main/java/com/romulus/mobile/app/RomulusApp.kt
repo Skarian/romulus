@@ -84,12 +84,12 @@ fun RomulusApp(initialRoute: String? = null) {
             }
             launch {
                 appContainer.queueRepository.observeTasks().collectLatest {
-                    appContainer.taskProgressTracker.pruneToTaskIds(it.mapTo(mutableSetOf()) { task -> task.id })
+                    appContainer.queueRuntimeStore.syncTasks(it)
                     tasks = it
                 }
             }
             launch {
-                appContainer.taskProgressTracker.observe().collectLatest {
+                appContainer.queueRuntimeStore.observeProgress().collectLatest {
                     liveProgress = it
                 }
             }
@@ -259,8 +259,7 @@ fun RomulusApp(initialRoute: String? = null) {
                             onCancel = { id -> scope.launch { appContainer.queueController.cancel(id) } },
                             onPause = { id -> scope.launch { appContainer.queueController.pause(id) } },
                             onResume = { id -> scope.launch { appContainer.queueController.resume(id) } },
-                            onDeletePartial = { id -> scope.launch { appContainer.queueController.deletePartial(id) } },
-                            onClearCompleted = { scope.launch { appContainer.queueController.clearCompleted() } }
+                            onDeletePartial = { id -> scope.launch { appContainer.queueController.deletePartial(id) } }
                         )
                     }
 

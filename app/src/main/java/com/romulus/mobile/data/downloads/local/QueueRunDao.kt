@@ -13,6 +13,9 @@ interface QueueRunDao {
     @Query("SELECT * FROM queue_runs WHERE endedAtEpochMs IS NULL ORDER BY startedAtEpochMs DESC LIMIT 1")
     suspend fun findOpenRun(): QueueRunEntity?
 
+    @Query("SELECT * FROM queue_runs WHERE runId = :runId LIMIT 1")
+    suspend fun findById(runId: String): QueueRunEntity?
+
     @Query("SELECT * FROM queue_runs ORDER BY startedAtEpochMs DESC LIMIT 1")
     suspend fun findLatestRun(): QueueRunEntity?
 }

@@ -16,6 +16,7 @@ data class DownloadTaskEntity(
     @PrimaryKey
     val id: String,
     val runId: String,
+    val queueIndex: Long,
     val snapshotId: String,
     val entryIndex: Int,
     val sourceDisplayName: String,
