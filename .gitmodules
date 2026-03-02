@@ -1,0 +1,3 @@
+[submodule "references/MediaFusion"]
+	path = references/MediaFusion
+	url = https://github.com/mhdzumair/MediaFusion

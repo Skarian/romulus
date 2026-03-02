@@ -1,0 +1,16 @@
+.gradle
+/local.properties
+/.idea
+/.kotlin
+.DS_Store
+/build
+/app/build
+captures
+.externalNativeBuild
+.cxx
+AGENTS.md
+.agent
+.agents
+/sample_files
+PRD.md
+skills-lock.json
