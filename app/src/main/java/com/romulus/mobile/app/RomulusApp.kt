@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,10 +41,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.romulus.mobile.core.text.HomeDisambiguator
 import com.romulus.mobile.core.validation.ValidationResult
-import com.romulus.mobile.data.downloads.QueuedDownload
 import com.romulus.mobile.data.downloads.TaskProgress
 import com.romulus.mobile.data.downloads.local.DownloadTaskEntity
 import com.romulus.mobile.data.settings.AppSettings
+import com.romulus.mobile.data.settings.SettingsRepository
+import com.romulus.mobile.domain.files.FileOption
 import com.romulus.mobile.domain.source.SourceEntry
 import com.romulus.mobile.domain.source.SourceMode
 import com.romulus.mobile.domain.source.SourceSnapshot
@@ -51,13 +54,14 @@ import com.romulus.mobile.feature.files.FilesScreen
 import com.romulus.mobile.feature.home.HomeScreen
 import com.romulus.mobile.feature.settings.SettingsScreen
 import com.romulus.mobile.feature.setup.SetupFlow
+import com.romulus.mobile.ui.theme.RomulusTheme
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
 fun RomulusApp(initialRoute: String? = null) {
-    MaterialTheme {
+    RomulusTheme {
         val context = LocalContext.current
         val appContainer = remember(context) {
             (context.applicationContext as RomulusApplication).appContainer
@@ -68,8 +72,9 @@ fun RomulusApp(initialRoute: String? = null) {
         var snapshot by remember { mutableStateOf(emptySnapshot()) }
         var tasks by remember { mutableStateOf<List<DownloadTaskEntity>>(emptyList()) }
         var liveProgress by remember { mutableStateOf<Map<String, TaskProgress>>(emptyMap()) }
-        var handledInitialRoute by remember { mutableStateOf<String?>(null) }
-        var coldRefreshKey by remember { mutableStateOf<String?>(null) }
+        var handledInitialRoute by rememberSaveable { mutableStateOf<String?>(null) }
+        var coldRefreshKey by rememberSaveable { mutableStateOf<String?>(null) }
+        var applyRenameByDefault by rememberSaveable { mutableStateOf(true) }
 
         LaunchedEffect(Unit) {
             launch {
@@ -146,12 +151,16 @@ fun RomulusApp(initialRoute: String? = null) {
                     appContainer.settingsRepository.setDownloadDirectoryUri(uri.toString())
                 },
                 onComplete = {
-                    if (settings.isConfigurationValid) {
+                    val latest = appContainer.settingsRepository.settings.first()
+                    if (!latest.isConfigurationValid) {
+                        false
+                    } else {
                         appContainer.settingsRepository.setSetupComplete(true)
+                        true
                     }
                 }
             )
-            return@MaterialTheme
+            return@RomulusTheme
         }
 
         val navController = rememberNavController()
@@ -165,6 +174,7 @@ fun RomulusApp(initialRoute: String? = null) {
 
         val activeCount = tasks.count { it.state.isActive }
         val displayTasks = applyLiveProgress(tasks, liveProgress)
+
         LaunchedEffect(settings.setupComplete, initialRoute) {
             if (!settings.setupComplete) return@LaunchedEffect
             val route = initialRoute ?: return@LaunchedEffect
@@ -177,12 +187,17 @@ fun RomulusApp(initialRoute: String? = null) {
             handledInitialRoute = route
         }
 
+        val currentRoute = navController.currentBackStackEntryAsState().value
+            ?.destination
+            ?.route
+
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             bottomBar = {
-                BottomAppBar {
-                    val currentRoute = navController.currentBackStackEntryAsState().value
-                        ?.destination
-                        ?.route
+                BottomAppBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ) {
                     tabs.forEach { tab ->
                         NavigationBarItem(
                             selected = currentRoute == tab.route,
@@ -219,19 +234,8 @@ fun RomulusApp(initialRoute: String? = null) {
                     modifier = Modifier.fillMaxSize()
                 ) {
                     composable(Routes.HOME) {
-                        val sourceStatus = when (settings.sourceMode) {
-                            SourceMode.URL -> if (settings.sourceIsStale) {
-                                "Source: stale cache"
-                            } else {
-                                "Source: live URL"
-                            }
-
-                            SourceMode.FILE -> "Source: local file"
-                            null -> "Source: not configured"
-                        }
                         HomeScreen(
                             rows = HomeDisambiguator.toRows(snapshot.entries),
-                            sourceStatus = sourceStatus,
                             validationSummary = snapshot.issues.takeIf { it.isNotEmpty() }?.let { issues ->
                                 val count = issues.size
                                 if (count == 1) {
@@ -240,6 +244,9 @@ fun RomulusApp(initialRoute: String? = null) {
                                     "$count invalid source entries were skipped."
                                 }
                             },
+                            showRefresh = settings.sourceMode == SourceMode.URL,
+                            applyRenameByDefault = applyRenameByDefault,
+                            onApplyRenameByDefaultChanged = { applyRenameByDefault = it },
                             onRefresh = {
                                 scope.launch {
                                     appContainer.sourceRepository.refreshFromUrlOnColdLaunchIfNeeded()
@@ -307,25 +314,33 @@ fun RomulusApp(initialRoute: String? = null) {
                             )
                             return@composable
                         }
+
                         FilesScreen(
                             snapshotId = snapshot.snapshotId,
                             entry = entry,
+                            applyRenameByDefault = applyRenameByDefault,
+                            onApplyRenameByDefaultChanged = { applyRenameByDefault = it },
                             onResolveFiles = { selectedEntry ->
                                 resolveFilesForEntry(
-                                    selectedEntry,
-                                    appContainer.settingsRepository,
-                                    appContainer.fileSelectionRepository
+                                    snapshotId = snapshot.snapshotId,
+                                    entry = selectedEntry,
+                                    settingsRepository = appContainer.settingsRepository,
+                                    fileSelectionRepository = appContainer.fileSelectionRepository
                                 )
                             },
                             onEnqueue = { queued ->
                                 appContainer.queueController.enqueue(queued)
                             },
-                            onBackToHome = {
-                                navController.popBackStack(Routes.HOME, inclusive = false)
+                            onDownloadsStarted = {
+                                Toast.makeText(context, "Downloads started", Toast.LENGTH_SHORT).show()
+                                navController.navigate(Routes.DOWNLOADS) {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
                         )
                     }
-
                 }
             }
         }
@@ -333,13 +348,14 @@ fun RomulusApp(initialRoute: String? = null) {
 }
 
 private suspend fun resolveFilesForEntry(
+    snapshotId: String,
     entry: SourceEntry,
-    settingsRepository: com.romulus.mobile.data.settings.SettingsRepository,
+    settingsRepository: SettingsRepository,
     fileSelectionRepository: com.romulus.mobile.data.files.FileSelectionRepository
-): Result<List<com.romulus.mobile.domain.files.FileOption>> {
+): Result<List<FileOption>> {
     val apiKey = settingsRepository.readApiKey()
         ?: return Result.failure(IllegalStateException("API key not configured"))
-    return fileSelectionRepository.resolveFiles(entry, apiKey)
+    return fileSelectionRepository.resolveFiles(snapshotId, entry, apiKey)
 }
 
 private fun applyLiveProgress(

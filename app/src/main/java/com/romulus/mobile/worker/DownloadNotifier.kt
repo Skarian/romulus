@@ -28,19 +28,19 @@ class DownloadNotifier(
         system.createNotificationChannel(
             NotificationChannel(
                 PROGRESS_CHANNEL_ID,
-                "Download progress",
+                "Active downloads",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Ongoing Romulus queue progress"
+                description = "Live status while downloads are running"
             }
         )
         system.createNotificationChannel(
             NotificationChannel(
                 COMPLETION_CHANNEL_ID,
-                "Download results",
+                "Download completion",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Queue completion outcomes"
+                description = "Summary when a download run finishes"
             }
         )
     }
@@ -71,7 +71,7 @@ class DownloadNotifier(
         if (!canPostNotifications()) return
         val notification = NotificationCompat.Builder(context, COMPLETION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Romulus")
+            .setContentTitle(counter.completionTitle())
             .setContentText(counter.completionMessage())
             .setContentIntent(downloadsPendingIntent())
             .setAutoCancel(true)
@@ -86,7 +86,7 @@ class DownloadNotifier(
         val indeterminate = percent == null
         return NotificationCompat.Builder(context, PROGRESS_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Romulus downloads")
+            .setContentTitle("Downloads in progress")
             .setContentText(counter.summaryText())
             .setContentIntent(downloadsPendingIntent())
             .setOngoing(true)

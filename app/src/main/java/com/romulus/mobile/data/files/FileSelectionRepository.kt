@@ -9,8 +9,19 @@ import com.romulus.mobile.domain.source.SourceEntry
 class FileSelectionRepository(
     private val realDebridClient: RealDebridClient
 ) {
+    private var activeSnapshotId: String? = null
+    private val cacheByEntryKey = linkedMapOf<String, List<FileOption>>()
 
-    suspend fun resolveFiles(entry: SourceEntry, apiKey: String): Result<List<FileOption>> {
+    suspend fun resolveFiles(snapshotId: String, entry: SourceEntry, apiKey: String): Result<List<FileOption>> {
+        if (activeSnapshotId != snapshotId) {
+            cacheByEntryKey.clear()
+            activeSnapshotId = snapshotId
+        }
+        val entryKey = "$snapshotId:${entry.index}"
+        cacheByEntryKey[entryKey]?.let { cached ->
+            return Result.success(cached)
+        }
+
         return runCatching {
             val ignoreMatcher = GlobIgnoreMatcher.from(entry.ignoreGlobs).getOrElse {
                 return@runCatching emptyList()
@@ -34,6 +45,7 @@ class FileSelectionRepository(
                     )
                 }
             }
+            cacheByEntryKey[entryKey] = resolved
             resolved
         }
     }

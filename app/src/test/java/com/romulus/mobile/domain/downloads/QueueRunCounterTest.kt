@@ -5,7 +5,7 @@ import org.junit.Test
 
 class QueueRunCounterTest {
     @Test
-    fun summaryUsesByteProgressAndIncludesFailedCountWhenNonZero() {
+    fun summaryUsesPercentBytesAndIncludesFailedCountWhenNonZero() {
         val successOnly = QueueRunCounter(
             completedCount = 2,
             totalCount = 4,
@@ -25,8 +25,8 @@ class QueueRunCounterTest {
             hasUnknownTotalBytes = false
         )
 
-        assertEquals("50% by bytes (512 B/1.0 KB), 2/4 completed", successOnly.summaryText())
-        assertEquals("50% by bytes (512 B/1.0 KB), 2/4 completed, 1 failed", withFailures.summaryText())
+        assertEquals("50% complete | 512 B/1.0 KB | 2/4 files complete", successOnly.summaryText())
+        assertEquals("50% complete | 512 B/1.0 KB | 2/4 files complete, 1 failed", withFailures.summaryText())
     }
 
     @Test
@@ -41,7 +41,7 @@ class QueueRunCounterTest {
             hasUnknownTotalBytes = true
         )
 
-        assertEquals("2.0 KB downloaded, 0/2 completed", counter.summaryText())
+        assertEquals("2.0 KB downloaded | 0/2 files complete", counter.summaryText())
     }
 
     @Test
@@ -55,6 +55,48 @@ class QueueRunCounterTest {
             totalBytes = 1024,
             hasUnknownTotalBytes = false
         )
-        assertEquals("Download run finished with cancellations", counter.completionMessage())
+        assertEquals("Downloads finished: 1 complete, 1 cancelled", counter.completionMessage())
+    }
+
+    @Test
+    fun completionMessageUsesFailedAndCancelledBranch() {
+        val counter = QueueRunCounter(
+            completedCount = 1,
+            totalCount = 3,
+            failedCount = 1,
+            cancelledCount = 1,
+            downloadedBytes = 1024,
+            totalBytes = 2048,
+            hasUnknownTotalBytes = false
+        )
+        assertEquals(
+            "Downloads finished: 1 complete, 1 failed, 1 cancelled",
+            counter.completionMessage()
+        )
+    }
+
+    @Test
+    fun completionTitleUsesSuccessAndFinishedBranches() {
+        val success = QueueRunCounter(
+            completedCount = 2,
+            totalCount = 2,
+            failedCount = 0,
+            cancelledCount = 0,
+            downloadedBytes = 4096,
+            totalBytes = 4096,
+            hasUnknownTotalBytes = false
+        )
+        val nonSuccess = QueueRunCounter(
+            completedCount = 1,
+            totalCount = 2,
+            failedCount = 1,
+            cancelledCount = 0,
+            downloadedBytes = 2048,
+            totalBytes = 4096,
+            hasUnknownTotalBytes = false
+        )
+
+        assertEquals("Downloads complete", success.completionTitle())
+        assertEquals("Downloads finished", nonSuccess.completionTitle())
     }
 }

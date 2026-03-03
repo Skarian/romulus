@@ -119,7 +119,7 @@ class PreferencesSettingsRepository(
 
     companion object {
         private const val DATASTORE_NAME = "romulus_settings.preferences_pb"
-        private const val DEFAULT_MAX_CONCURRENCY = 10
+        private const val DEFAULT_MAX_CONCURRENCY = 25
         private const val MIN_MAX_CONCURRENCY = 1
         private const val MAX_MAX_CONCURRENCY = 100
     }

@@ -36,13 +36,13 @@ The app is setup-gated. Before Home/Downloads/Settings are shown, setup must com
 
 1. Validate Real-Debrid API key.
 2. Configure JSON source (public URL or local file picker).
-3. Pick a download directory using Storage Access Framework.
+3. Pick a download directory using Storage Access Framework (this completes setup immediately and shows `Setup Completed!`).
 
 After setup, bottom navigation routes are:
 
-- `Home`: validated source catalog, cold-launch URL refresh, and manual refresh.
-- `Downloads`: queue states, controls, details, and clear terminal history.
-- `Settings`: credential/source/directory edits, concurrency, and manual refresh.
+- `Home`: validated source catalog with a `Source | Folder` table, URL-only refresh action, and direct navigation into per-entry file tables.
+- `Downloads`: one reverse-chronological table where the file column takes remaining width, while progress and overflow actions stay in compact columns.
+- `Settings`: grouped sections for credentials/source/directory/download behavior, obfuscated saved API key display, and manual refresh near source controls.
 
 ## Build and Verification
 
@@ -67,11 +67,14 @@ After setup, bottom navigation routes are:
 - Queue states are persisted in Room and survive process restarts.
 - Queue uses split state lanes: Room for durable lifecycle state and in-memory runtime store for high-frequency progress/control updates.
 - Notification permission is requested at runtime on Android 13+.
-- Queue progress notification uses `x/x completed` and appends failed count when needed.
+- Queue progress notification shows percent, bytes downloaded, and file completion count (plus failed count when present).
 - Completion notification posts when active count transitions to zero.
 - Progress and completion notifications deep-link to `Downloads`.
 - Local source snapshots are immutable once queued work is created.
 - Home shows an invalid-entry summary when source validation skips malformed entries.
+- File-resolution results are cached per snapshot/entry in-memory to avoid repeated resolve churn during configuration changes and route switches.
+- File selection uses a compact top icon row (`warning` when present, `search`, `settings`, `download`) and shows resolver warnings in a popup dialog.
+- Default max concurrency fallback is `25`.
 
 ## Dependency policy
 

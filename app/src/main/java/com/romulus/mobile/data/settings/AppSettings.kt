@@ -11,7 +11,7 @@ data class AppSettings(
     val sourceIsStale: Boolean = false,
     val sourceLastRefreshEpochMs: Long? = null,
     val downloadDirectoryUri: String? = null,
-    val maxConcurrency: Int = 10
+    val maxConcurrency: Int = 25
 ) {
     val hasApiKey: Boolean
         get() = !encryptedApiKey.isNullOrBlank()

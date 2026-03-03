@@ -12,27 +12,34 @@ data class QueueRunCounter(
     val hasUnknownTotalBytes: Boolean
 ) {
     fun summaryText(): String {
-        val countSummary = buildString {
-            append("$completedCount/$totalCount completed")
-            if (failedCount > 0) {
-                append(", $failedCount failed")
-            }
-        }
+        val countSummary = countSummary()
         if (hasUnknownTotalBytes || totalBytes <= 0L) {
-            return "${formatBytes(downloadedBytes)} downloaded, $countSummary"
+            return "${formatBytes(downloadedBytes)} downloaded | $countSummary"
         }
         val percent = progressPercent() ?: 0
         return buildString {
-            append("$percent% by bytes (${formatBytes(downloadedBytes)}/${formatBytes(totalBytes)}), ")
+            append("$percent% complete | ${formatBytes(downloadedBytes)}/${formatBytes(totalBytes)} | ")
             append(countSummary)
+        }
+    }
+
+    fun completionTitle(): String {
+        return if (failedCount == 0 && cancelledCount == 0) {
+            "Downloads complete"
+        } else {
+            "Downloads finished"
         }
     }
 
     fun completionMessage(): String {
         return when {
-            failedCount > 0 -> "Download run finished with failures"
-            cancelledCount > 0 -> "Download run finished with cancellations"
-            else -> "Download run finished successfully"
+            failedCount > 0 && cancelledCount > 0 ->
+                "Downloads finished: $completedCount complete, $failedCount failed, $cancelledCount cancelled"
+            failedCount > 0 ->
+                "Downloads finished: $completedCount complete, $failedCount failed"
+            cancelledCount > 0 ->
+                "Downloads finished: $completedCount complete, $cancelledCount cancelled"
+            else -> "All downloads complete"
         }
     }
 
@@ -53,6 +60,16 @@ data class QueueRunCounter(
             safe >= mb -> String.format(Locale.US, "%.1f MB", safe / mb)
             safe >= kb -> String.format(Locale.US, "%.1f KB", safe / kb)
             else -> "$safe B"
+        }
+    }
+
+    private fun countSummary(): String {
+        val fileLabel = if (totalCount == 1) "file" else "files"
+        return buildString {
+            append("$completedCount/$totalCount $fileLabel complete")
+            if (failedCount > 0) {
+                append(", $failedCount failed")
+            }
         }
     }
 }
