@@ -44,6 +44,35 @@ After setup, bottom navigation routes are:
 - `Downloads`: one reverse-chronological table where the file column takes remaining width, while progress and overflow actions stay in compact columns.
 - `Settings`: grouped sections for credentials/source/directory/download behavior, obfuscated saved API key display, and manual refresh near source controls.
 
+## Source JSON Contract
+
+Each source entry can optionally define a torrent-internal `path` scope. File selection only enumerates files whose Real-Debrid path is inside that folder.
+
+- `version` stays `1`.
+- `entries[i].path` is optional.
+- If `path` is omitted, `null`, or blank, it defaults to `/` (root scope, include all files).
+- `path` uses forward slashes and cannot contain `..`.
+- Path matching is boundary-safe: `/Season 1` does not match `/Season 10`.
+
+Example:
+
+```json
+{
+  "version": 1,
+  "entries": [
+    {
+      "displayName": "Show Pack",
+      "subfolder": "shows/show-pack",
+      "path": "/Series/Season 01",
+      "torrents": [
+        { "url": "magnet:?xt=urn:btih:...", "partName": "Part 1" }
+      ],
+      "ignore": { "glob": ["*.nfo"] }
+    }
+  ]
+}
+```
+
 ## Build and Verification
 
 ```bash

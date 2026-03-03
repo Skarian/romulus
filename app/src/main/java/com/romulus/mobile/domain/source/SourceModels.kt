@@ -26,6 +26,7 @@ data class SourceEntry(
     val index: Int,
     val displayName: String,
     val subfolder: String,
+    val path: String = "/",
     val torrents: List<SourceTorrent>,
     val rename: RenameRule?,
     val ignoreGlobs: List<String>

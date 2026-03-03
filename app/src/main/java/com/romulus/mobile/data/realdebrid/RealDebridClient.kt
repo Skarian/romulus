@@ -68,22 +68,25 @@ class RealDebridClient(
         apiKey: String,
         magnetUrl: String,
         originalFilename: String,
-        sizeBytes: Long
+        sizeBytes: Long,
+        torrentFileId: Int? = null
     ): UnrestrictedLinkDto {
         val infoHash = extractInfoHash(magnetUrl)
             ?: return resolveFreshUnrestrictedLinkLegacy(
                 apiKey = apiKey,
                 magnetUrl = magnetUrl,
                 originalFilename = originalFilename,
-                sizeBytes = sizeBytes
+                sizeBytes = sizeBytes,
+                torrentFileId = torrentFileId
             )
         return runCatching {
-            resolveFreshUnrestrictedLinkMediaFusionStyle(
+            resolveFreshUnrestrictedLinkHashReuseStyle(
                 apiKey = apiKey,
                 magnetUrl = magnetUrl,
                 infoHash = infoHash,
                 originalFilename = originalFilename,
-                sizeBytes = sizeBytes
+                sizeBytes = sizeBytes,
+                torrentFileId = torrentFileId
             )
         }.getOrElse { primaryFailure ->
             if (isAuthError(primaryFailure)) {
@@ -94,7 +97,8 @@ class RealDebridClient(
                 apiKey = apiKey,
                 magnetUrl = magnetUrl,
                 originalFilename = originalFilename,
-                sizeBytes = sizeBytes
+                sizeBytes = sizeBytes,
+                torrentFileId = torrentFileId
             )
         }
     }
@@ -102,8 +106,14 @@ class RealDebridClient(
     private fun rematchFileId(
         files: List<TorrentFileDto>,
         originalFilename: String,
-        sizeBytes: Long
+        sizeBytes: Long,
+        preferredFileId: Int? = null
     ): Int {
+        preferredFileId?.let { preferredId ->
+            files.firstOrNull { file -> file.id == preferredId }?.let { matched ->
+                return matched.id
+            }
+        }
         val expectedName = originalFilename.trim().lowercase()
         val matches = files.filter { file ->
             file.bytes == sizeBytes && basename(file.path).lowercase() == expectedName
@@ -119,12 +129,13 @@ class RealDebridClient(
         return path.substringAfterLast('/').substringAfterLast('\\')
     }
 
-    private suspend fun resolveFreshUnrestrictedLinkMediaFusionStyle(
+    private suspend fun resolveFreshUnrestrictedLinkHashReuseStyle(
         apiKey: String,
         magnetUrl: String,
         infoHash: String,
         originalFilename: String,
-        sizeBytes: Long
+        sizeBytes: Long,
+        torrentFileId: Int?
     ): UnrestrictedLinkDto {
         val authHeader = bearer(apiKey)
         val session = getOrPrepareSession(
@@ -144,7 +155,8 @@ class RealDebridClient(
         val fileId = rematchFileId(
             files = info.files,
             originalFilename = originalFilename,
-            sizeBytes = sizeBytes
+            sizeBytes = sizeBytes,
+            preferredFileId = torrentFileId
         )
         if (!isFileSelected(info.files, fileId)) {
             val selected = info.files
@@ -190,7 +202,8 @@ class RealDebridClient(
         apiKey: String,
         magnetUrl: String,
         originalFilename: String,
-        sizeBytes: Long
+        sizeBytes: Long,
+        torrentFileId: Int?
     ): UnrestrictedLinkDto {
         val authHeader = bearer(apiKey)
         val added = withRateLimit {
@@ -200,7 +213,8 @@ class RealDebridClient(
         val fileId = rematchFileId(
             files = initialInfo.files,
             originalFilename = originalFilename,
-            sizeBytes = sizeBytes
+            sizeBytes = sizeBytes,
+            preferredFileId = torrentFileId
         )
         withRateLimit {
             api.selectFiles(

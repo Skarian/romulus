@@ -13,6 +13,7 @@ data class SourceDocumentDto(
 data class SourceEntryDto(
     val displayName: String? = null,
     val subfolder: String? = null,
+    val path: String? = null,
     val torrents: List<SourceTorrentDto> = emptyList(),
     val rename: RenameDto? = null,
     val ignore: IgnoreDto? = null

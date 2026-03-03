@@ -1,9 +1,11 @@
 package com.romulus.mobile.core.validation
 
 import com.romulus.mobile.domain.files.GlobIgnoreMatcher
+import com.romulus.mobile.domain.source.ConfiguredPathNormalization
 import com.romulus.mobile.domain.source.RenameRule
 import com.romulus.mobile.domain.source.SourceEntry
 import com.romulus.mobile.domain.source.SourceIssue
+import com.romulus.mobile.domain.source.SourcePathContract
 import com.romulus.mobile.domain.source.SourceTorrent
 
 class EntryValidator {
@@ -11,6 +13,7 @@ class EntryValidator {
         rawIndex: Int,
         displayName: String?,
         subfolder: String?,
+        path: String?,
         torrents: List<SourceTorrent>,
         rename: RenameRule?,
         ignoreGlobs: List<String>
@@ -25,6 +28,12 @@ class EntryValidator {
         }
         if (cleanSubfolder.startsWith("/") || cleanSubfolder.contains("..")) {
             return null to SourceIssue(rawIndex, "subfolder must be relative and cannot contain ..")
+        }
+        val normalizedPath = when (val result = SourcePathContract.normalizeConfiguredPath(path)) {
+            is ConfiguredPathNormalization.Valid -> result.path
+            is ConfiguredPathNormalization.Invalid -> {
+                return null to SourceIssue(rawIndex, result.message)
+            }
         }
         if (torrents.isEmpty()) {
             return null to SourceIssue(rawIndex, "torrents must be non-empty")
@@ -54,6 +63,7 @@ class EntryValidator {
             index = rawIndex,
             displayName = cleanDisplayName,
             subfolder = cleanSubfolder,
+            path = normalizedPath,
             torrents = torrents,
             rename = rename,
             ignoreGlobs = ignoreGlobs

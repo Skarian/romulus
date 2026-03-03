@@ -5,6 +5,7 @@ import com.romulus.mobile.domain.files.FileOption
 import com.romulus.mobile.domain.files.GlobIgnoreMatcher
 import com.romulus.mobile.domain.files.RenameTransformer
 import com.romulus.mobile.domain.source.SourceEntry
+import com.romulus.mobile.domain.source.SourcePathContract
 
 class FileSelectionRepository(
     private val realDebridClient: RealDebridClient
@@ -31,6 +32,7 @@ class FileSelectionRepository(
                 val partName = torrent.partName ?: "Part ${partIndex + 1}"
                 val torrentFiles = realDebridClient.resolveTorrentFiles(apiKey, torrent.url)
                 torrentFiles.files.forEach { file ->
+                    if (!SourcePathContract.matches(entry.path, file.path)) return@forEach
                     if (ignoreMatcher.matches(file.path)) return@forEach
                     val originalName = file.path.substringAfterLast('/').substringAfterLast('\\')
                     val displayName = RenameTransformer.apply(originalName, entry.rename)

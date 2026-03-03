@@ -4,15 +4,11 @@ import android.content.Context
 import android.net.Uri
 import com.romulus.mobile.core.source.SnapshotIdFactory
 import com.romulus.mobile.core.time.ClockProvider
-import com.romulus.mobile.core.validation.EntryValidator
 import com.romulus.mobile.core.validation.ValidationResult
 import com.romulus.mobile.data.settings.SettingsRepository
 import com.romulus.mobile.domain.source.RefreshResult
-import com.romulus.mobile.domain.source.RenameRule
-import com.romulus.mobile.domain.source.SourceIssue
 import com.romulus.mobile.domain.source.SourceMode
 import com.romulus.mobile.domain.source.SourceSnapshot
-import com.romulus.mobile.domain.source.SourceTorrent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -34,7 +30,7 @@ class DefaultSourceRepository(
     private val httpClient: OkHttpClient = OkHttpClient()
 ) : SourceRepository {
 
-    private val validator = EntryValidator()
+    private val entryContractMapper = SourceEntryContractMapper()
     private val snapshotDirectory = File(appContext.filesDir, SNAPSHOT_DIRECTORY).apply { mkdirs() }
 
     override fun observeActiveSnapshot(): Flow<SourceSnapshot> {
@@ -172,43 +168,15 @@ class DefaultSourceRepository(
             return ParseResult.Failure("version must be 1")
         }
 
-        val issues = mutableListOf<SourceIssue>()
-        val validEntries = parsed.entries.mapIndexedNotNull { index, dto ->
-            val torrents = dto.torrents.mapIndexed { partIndex, torrentDto ->
-                SourceTorrent(
-                    partIndex = partIndex,
-                    url = torrentDto.url.trim(),
-                    partName = torrentDto.partName?.trim()?.takeIf { it.isNotBlank() }
-                )
-            }
-            val rename = dto.rename?.let {
-                RenameRule(
-                    pattern = it.pattern.orEmpty(),
-                    replacement = it.replacement.orEmpty()
-                )
-            }
-            val ignoreGlobs = dto.ignore?.globPatterns.orEmpty()
-            val (entry, issue) = validator.validate(
-                rawIndex = index,
-                displayName = dto.displayName,
-                subfolder = dto.subfolder,
-                torrents = torrents,
-                rename = rename,
-                ignoreGlobs = ignoreGlobs
-            )
-            if (issue != null) {
-                issues += issue
-            }
-            entry
-        }
+        val entryMapping = entryContractMapper.map(parsed.entries)
 
         val snapshot = SourceSnapshot(
             snapshotId = SnapshotIdFactory.newId(clockProvider.nowEpochMillis()),
             sourceMode = sourceMode,
             sourceValue = sourceValue,
             generatedAtEpochMs = clockProvider.nowEpochMillis(),
-            entries = validEntries,
-            issues = issues,
+            entries = entryMapping.entries,
+            issues = entryMapping.issues,
             stale = stale
         )
 

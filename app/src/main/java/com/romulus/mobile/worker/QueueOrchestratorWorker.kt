@@ -107,7 +107,8 @@ class QueueOrchestratorWorker(
                 apiKey = apiKey,
                 magnetUrl = current.magnetUrl,
                 originalFilename = current.originalFilename,
-                sizeBytes = current.sizeBytes
+                sizeBytes = current.sizeBytes,
+                torrentFileId = current.torrentFileId
             )
         }.getOrElse { throwable ->
             if (throwable is HttpException && (throwable.code() == 401 || throwable.code() == 403)) {
