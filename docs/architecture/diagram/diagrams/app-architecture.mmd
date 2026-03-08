@@ -1,0 +1,88 @@
+flowchart LR
+  subgraph APP[app/]
+    APPROOT[composition root and navigation]
+  end
+
+  subgraph UI[ui/]
+    UISETUP[setup]
+    UIHOME[home]
+    UIFILES[files]
+    UIDL[downloads]
+    UISETTINGS[settings]
+  end
+
+  subgraph SOURCE[source/]
+    SINGEST[ingest and snapshot]
+    SBROWSE[browse]
+  end
+
+  subgraph DL[downloads/]
+    DCONFIG[config]
+    DQUEUE[queue]
+    DWORK[work]
+    DATTEMPT[attempts]
+    DOUTPUT[output]
+    DNOTIFY[notifications]
+  end
+
+  subgraph RD[realdebrid/]
+    RDCLIENT[token plus listing plus selection plus acquisition]
+  end
+
+  subgraph RZ[remotezip/]
+    RZCLIENT[probe plus enumerate plus copy]
+  end
+
+  subgraph DG[diagnostics/]
+    DIAG[event capture plus retention plus export]
+  end
+
+  APPROOT --> UISETUP
+  APPROOT --> UIHOME
+  APPROOT --> UIFILES
+  APPROOT --> UIDL
+  APPROOT --> UISETTINGS
+
+  UISETUP --> SDOC[SourceDocument]
+  SDOC --> SINGEST
+  UISETUP --> RDCLIENT
+  UISETUP --> DCONFIG
+
+  UISETTINGS --> SINGEST
+  UISETTINGS --> RDCLIENT
+  UISETTINGS --> DCONFIG
+  UISETTINGS --> DIAG
+
+  SINGEST --> SSNAP[SourceSnapshot]
+  SSNAP --> UIHOME
+  UIHOME --> UIFILES
+
+  UIFILES --> SBROWSE
+  SBROWSE --> RDCLIENT
+  SBROWSE --> RZCLIENT
+  SBROWSE --> SITEM[SelectableItems]
+  SITEM --> UIFILES
+
+  UIFILES --> QTASKIN[QueueTaskInputs]
+  QTASKIN --> DQUEUE
+  DQUEUE --> QSTATE[QueueState]
+  QSTATE --> UIDL
+
+  DQUEUE --> DWORK
+  DWORK --> RQT[Runnable QueueTask]
+  RQT --> DATTEMPT
+
+  DATTEMPT --> RDCLIENT
+  DATTEMPT --> RZCLIENT
+  DATTEMPT --> DART[DownloadArtifact]
+  DART --> DOUTPUT
+  DOUTPUT --> FOUT[FinalOutput]
+  FOUT --> DQUEUE
+  DWORK --> DNOTIFY
+
+  SINGEST --> DIAG
+  SBROWSE --> DIAG
+  DQUEUE --> DIAG
+  DATTEMPT --> DIAG
+  DOUTPUT --> DIAG
+  DNOTIFY --> DIAG

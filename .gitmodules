@@ -1,3 +1,21 @@
 [submodule "references/MediaFusion"]
 	path = references/MediaFusion
 	url = https://github.com/mhdzumair/MediaFusion
+[submodule "references/unchained-android"]
+	path = references/unchained-android
+	url = https://github.com/LivingWithHippos/unchained-android
+[submodule "references/rdt-client"]
+	path = references/rdt-client
+	url = https://github.com/rogerfar/rdt-client
+[submodule "references/7-Zip-JBinding-4Android"]
+	path = references/7-Zip-JBinding-4Android
+	url = https://github.com/omicronapps/7-Zip-JBinding-4Android
+[submodule "references/zip4j"]
+	path = references/zip4j
+	url = https://github.com/srikanth-lingala/zip4j
+[submodule "references/commons-compress"]
+	path = references/commons-compress
+	url = https://github.com/apache/commons-compress
+[submodule "references/cloudzip"]
+	path = references/cloudzip
+	url = https://github.com/ozkatz/cloudzip

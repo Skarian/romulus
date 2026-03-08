@@ -1,0 +1,31 @@
+diagram:
+    cd architecture/diagram && npm run dev
+
+test:
+    cd architecture/diagram && npm test
+
+export-docs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    docs_dir="{{justfile_directory()}}"
+    repo_dir="$(cd "$docs_dir/.." && pwd)"
+    export_dir="$docs_dir/exports"
+    timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    archive_path="$export_dir/docs-export-$timestamp.zip"
+    mkdir -p "$export_dir"
+    cd "$repo_dir"
+    architecture_docs=(docs/architecture/*.md)
+    export_inputs=(
+        docs/PRD.md
+        docs/MIGRATION.md
+        docs/schema.json
+        docs/behavior
+        docs/ARCHITECTURE.md
+        docs/BEHAVIOR.md
+        docs/spikes/outputs
+        docs/README.md
+        "${architecture_docs[@]}"
+    )
+    zip -r "$archive_path" "${export_inputs[@]}"
+    printf 'Created %s\n' "$archive_path"

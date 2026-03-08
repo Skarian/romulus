@@ -1,0 +1,44 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+default:
+    @just --list
+
+init-env:
+    test -f .env.local || cp .env.example .env.local
+
+fixtures env_file=".env.local":
+    ./scripts/generate-fixtures.sh "{{env_file}}"
+
+spike-1-build:
+    ../../gradlew -p apps/spike-1-cli --no-daemon test installDist
+
+spike-1:
+    just fixtures
+    ../../gradlew -p apps/spike-1-cli --no-daemon run
+
+spike-1-uncached:
+    just fixtures
+    ../../gradlew -p apps/spike-1-cli --no-daemon run --args='--profile=known-uncached'
+
+spike-1-clean:
+    rm -rf fixtures/generated/spike-1/run-artifacts
+    rm -rf apps/spike-1-cli/build
+
+spike-1-delete env_file=".env.local":
+    python3 ./scripts/delete_spike1_existing.py "{{env_file}}"
+
+spike-2-android:
+    just fixtures
+    ../../gradlew -p apps/spike-2-android :app:spike2ConnectedMatrix
+
+spike-3:
+    just fixtures
+    ../../gradlew -p apps/spike-3-remote-zip test runSpike3Matrix
+
+spike-3-server:
+    just fixtures
+    ../../gradlew -p apps/spike-3-remote-zip runSpike3Server
+
+spike-4-android:
+    just fixtures
+    ../../gradlew -p apps/spike-4-android :app:spike4ConnectedMatrix

@@ -1,0 +1,217 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f7fb;
+  --card: #ffffff;
+  --ink: #0f172a;
+  --muted: #475569;
+  --line: #d6deea;
+  --accent: #03543f;
+  --danger: #9f1239;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(160deg, #edf2ff 0%, #f8fafc 48%, #eefcf5 100%);
+  color: var(--ink);
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.wrap {
+  width: min(1100px, 92vw);
+  margin: 0 auto;
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--bg) 90%, white 10%);
+  border-bottom: 1px solid var(--line);
+}
+
+.top .wrap {
+  padding: 18px 0 14px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.top p {
+  margin: 0.45rem 0;
+  color: var(--muted);
+}
+
+.diagram-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.diagram-links a {
+  display: inline-block;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--ink);
+  background: white;
+  font-size: 0.9rem;
+}
+
+.diagram-links a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.status {
+  font-size: 0.9rem;
+}
+
+main {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 0 2rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 12px 30px -24px rgba(15, 23, 42, 0.4);
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.summary {
+  margin: 0.5rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.diagram-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.diagram-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 0.32rem 0.58rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.diagram-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.diagram-zoom {
+  font-size: 0.84rem;
+  color: var(--muted);
+  margin-left: 0.2rem;
+}
+
+.diagram-viewport {
+  width: 100%;
+  min-height: 420px;
+  max-height: 70vh;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f8fbff 0%, #f4f8fd 100%);
+  cursor: grab;
+  position: relative;
+}
+
+.diagram-viewport:focus {
+  outline: 2px solid #0f766e;
+  outline-offset: 1px;
+}
+
+.diagram-viewport.dragging {
+  cursor: grabbing;
+}
+
+.diagram-render {
+  width: fit-content;
+  min-width: 100%;
+}
+
+.diagram-render svg {
+  display: block;
+  max-width: none !important;
+  height: auto;
+  user-select: none;
+  pointer-events: none;
+}
+
+details {
+  margin-top: 0.7rem;
+}
+
+summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+pre {
+  margin-top: 0.5rem;
+  overflow-x: auto;
+  padding: 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  font-size: 0.82rem;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.card:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  border-radius: 0;
+  padding: 1.1rem;
+  overflow: auto;
+}
+
+.card:fullscreen .diagram-viewport {
+  max-height: calc(100vh - 220px);
+}
+
+@media (max-width: 700px) {
+  .top .wrap {
+    padding-top: 14px;
+  }
+
+  .card {
+    padding: 0.8rem;
+  }
+
+  .diagram-viewport {
+    min-height: 320px;
+  }
+}

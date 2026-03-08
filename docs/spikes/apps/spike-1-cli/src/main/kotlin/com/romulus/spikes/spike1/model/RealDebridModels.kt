@@ -1,0 +1,68 @@
+package com.romulus.spikes.spike1.model
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class TorrentSummaryDto(
+    val id: String,
+    val hash: String? = null,
+    val status: String? = null,
+)
+
+@Serializable
+data class AvailableHostDto(
+    val host: String,
+    @SerialName("max_file_size")
+    val maxFileSize: Long? = null,
+)
+
+@Serializable
+data class AddedMagnetDto(
+    val id: String,
+    val uri: String? = null,
+)
+
+@Serializable
+data class TorrentInfoDto(
+    val id: String,
+    val hash: String? = null,
+    val filename: String? = null,
+    val status: String? = null,
+    val progress: Double? = null,
+    val speed: Long? = null,
+    val seeders: Int? = null,
+    val ended: String? = null,
+    val files: List<TorrentFileDto> = emptyList(),
+    val links: List<String> = emptyList(),
+)
+
+@Serializable
+data class TorrentFileDto(
+    val id: Int,
+    val path: String,
+    val bytes: Long = 0,
+    val selected: Int = 0,
+    @SerialName("unrestricted")
+    val unrestricted: String? = null,
+    @SerialName("link")
+    val link: String? = null,
+)
+
+@Serializable
+data class UnrestrictedLinkDto(
+    val id: String? = null,
+    val filename: String,
+    @SerialName("download")
+    val downloadUrl: String,
+    @SerialName("filesize")
+    val fileSize: Long? = null,
+)
+
+@Serializable
+data class ApiErrorPayload(
+    @SerialName("error_code")
+    val errorCode: Int? = null,
+    @SerialName("error")
+    val error: String? = null,
+)
