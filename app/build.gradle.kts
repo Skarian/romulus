@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
+    id("dev.detekt")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
@@ -63,7 +64,34 @@ kapt {
     correctErrorTypes = true
 }
 
+val detektBaselineFile = rootProject.file("config/detekt/baseline.xml")
+
+detekt {
+    toolVersion = "2.0.0-alpha.1"
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+    buildUponDefaultConfig = true
+    allRules = false
+    ignoreFailures = false
+    parallel = true
+    basePath.set(rootDir)
+    if (detektBaselineFile.exists()) {
+        baseline = detektBaselineFile
+    }
+}
+
+tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
+    reports {
+        checkstyle.required.set(true)
+        html.required.set(true)
+        sarif.required.set(true)
+        markdown.required.set(false)
+    }
+}
+
 dependencies {
+    detektPlugins("dev.detekt:detekt-rules-ktlint-wrapper:2.0.0-alpha.1")
+    detektPlugins("io.nlopez.compose.rules:detekt:0.5.0")
+
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.12.0")
