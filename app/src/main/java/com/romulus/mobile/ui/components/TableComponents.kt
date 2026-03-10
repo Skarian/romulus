@@ -14,10 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun TableHeaderRow(
-    modifier: Modifier = Modifier,
-    content: @Composable RowScope.() -> Unit
-) {
+fun TableHeaderRow(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,

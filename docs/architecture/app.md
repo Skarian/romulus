@@ -403,7 +403,10 @@ data class SetupDraft(
 
 sealed interface SetupSubmissionResult {
     data object Completed : SetupSubmissionResult
-    data class Rejected(val message: String) : SetupSubmissionResult
+    data class Rejected(
+        val message: String,
+        val sourceIssues: List<SourceValidationIssue> = emptyList()
+    ) : SetupSubmissionResult
 }
 
 class SetupSubmissionCoordinator(

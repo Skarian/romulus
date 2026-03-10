@@ -8,10 +8,7 @@ import androidx.compose.runtime.Composable
 private val RomulusTypography = Typography()
 
 @Composable
-fun RomulusTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit
-) {
+fun RomulusTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     val colorScheme = if (darkTheme) {
         DarkRomulusColorScheme
     } else {

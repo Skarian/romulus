@@ -564,7 +564,7 @@ data class SettingsFieldLockState(
 
 data class SettingsUiState(
     val maskedToken: String,
-    val sourceSummary: AcceptedSourceSummary,
+    val sourceSummary: AcceptedSourceSummary?,
     val downloadSettings: DownloadSettingsState,
     val diagnosticsSettings: DiagnosticsSettings,
     val lockState: SettingsFieldLockState,

@@ -85,7 +85,7 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
 - `SourceFacade.observeHomeState(): StateFlow<HomeSourceState>`
 - `SourceFacade.observeReadiness(): StateFlow<SourceReadiness>`
 - `SourceFacade.readStartupReadiness(): SourceReadiness`
-- `SourceFacade.observeAcceptedSourceSummary(): StateFlow<AcceptedSourceSummary>`
+- `SourceFacade.observeAcceptedSourceSummary(): StateFlow<AcceptedSourceSummary?>`
 - `SourceFacade.browse(request: BrowseRequest): BrowseResult`
 
 ## Internal Structure
@@ -184,7 +184,7 @@ class SourceFacade(
     fun observeHomeState(): StateFlow<HomeSourceState>
     fun observeReadiness(): StateFlow<SourceReadiness>
     suspend fun readStartupReadiness(): SourceReadiness
-    fun observeAcceptedSourceSummary(): StateFlow<AcceptedSourceSummary>
+    fun observeAcceptedSourceSummary(): StateFlow<AcceptedSourceSummary?>
     suspend fun browse(request: BrowseRequest): BrowseResult
 }
 ```

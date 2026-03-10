@@ -1,3 +1,5 @@
+@file:Suppress("MagicNumber", "MatchingDeclarationName")
+
 package com.romulus.mobile.ui.layout
 
 import androidx.compose.foundation.background
