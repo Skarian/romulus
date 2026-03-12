@@ -107,8 +107,8 @@ diagnostics/
 3. `realdebrid/` owns:
    - API token validation,
    - request budgeting,
-   - torrent file listing,
-   - provider file selection,
+   - provider file selection and acquisition for queued standard-file work,
+   - exact-container provider lookup for archive-selection mode,
    - provider acquisition polling,
    - later unrestricted-link resolution after acquisition reports ready links.
 4. `realdebrid/` should expose Romulus-shaped models rather than leaking raw API details across the app.
@@ -167,7 +167,7 @@ diagnostics/
 2. `source/browse` assigns standard-file `SelectableItemId`.
 3. `remotezip/` assigns duplicate-safe archive-entry identity; archive-entry retry and redownload must use stable entry identity, never filename or path alone.
 4. `downloads/queue` assigns `taskId` and binds it to one enqueue-time `snapshotId` plus one selected-item identity; execution, retry, restart, and recovery never rebind a task to a newer active snapshot.
-5. `realdebrid/` owns provider locator data needed to re-resolve one queued selected item without changing queue identity.
+5. `source/torrentmeta` owns the torrent-native selection intent used to re-derive one queued standard-file selection without changing queue identity, while `realdebrid/` owns exact-zip provider locator data.
 6. `downloads/output` assigns reservation identity and final output record identity; display names are never the only durable key.
 
 ## 7. Shared Records and Commands
@@ -222,7 +222,7 @@ diagnostics/
 ### 8.3 Standard Files Browse
 
 1. `ui/files` asks `source/browse` for the selectable items for one snapshot entry.
-2. `source/browse` asks `realdebrid/` for provider file inventory.
+2. `source/browse` reads cached standard browse inventory for the snapshot entry and fills that cache through temporary `realdebrid/` enumeration on cache miss.
 3. `source/browse` applies path scope first and ignore rules second.
 4. `source/browse` returns `SelectableItem.StandardFile[]` to `ui/files`.
 5. Search, multi-select, and dialog state remain in `ui/files`.
@@ -250,7 +250,9 @@ diagnostics/
    - unarchive intent,
    - recursive-unarchive intent,
    - storage target context, including output sub-folder context when present,
-   - provider locator data needed for retry, restart, or recovery.
+   - source-owned execution context needed for retry, restart, or recovery:
+     - torrent-native standard-file selection intent, or
+     - archive-selection outer-container locator plus archive-entry identity.
 4. Execution, retry, restart, and recovery keep that queue binding and never rebind a task to a newer active snapshot.
 5. `ui/downloads` reads durable queue state from `downloads/queue`, not from reconstructed screen-local state.
 6. `ui/downloads` and `ui/settings` never infer active work from local UI memory; they read queue authority instead.

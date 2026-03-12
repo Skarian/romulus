@@ -3,10 +3,12 @@ package com.romulus.mobile.realdebrid.acquisition
 import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.realdebrid.ProviderResumeMarker
 import com.romulus.mobile.realdebrid.ProviderSelectionCandidate
+import com.romulus.mobile.realdebrid.ProviderSelectionRequest
 import com.romulus.mobile.realdebrid.RealDebridApi
 import com.romulus.mobile.realdebrid.TorrentInfoDto
 import com.romulus.mobile.realdebrid.budget.RequestBudget
 import com.romulus.mobile.realdebrid.captureResult
+import com.romulus.mobile.realdebrid.providerSelectionId
 import com.romulus.mobile.realdebrid.withSelectionIds
 import kotlinx.coroutines.delay
 import retrofit2.HttpException
@@ -15,6 +17,43 @@ internal class ProviderSelectionService(
     private val budget: RequestBudget,
     private val api: RealDebridApi
 ) {
+    suspend fun start(request: ProviderSelectionRequest): Result<ProviderResumeMarker> =
+        captureResult {
+            val host = budget
+                .run { api.getAvailableHosts() }
+                .firstOrNull()
+                ?.host
+                ?: error("No Real-Debrid hosts are available")
+            val addedTorrent = budget.run {
+                api.addMagnet(
+                    magnet = request.sourceMagnetUri,
+                    host = host
+                )
+            }
+            val info = readTorrentInfoWithRetry(addedTorrent.id)
+            val keyedFiles = info.files.withSelectionIds()
+            val requestedSelectionId = providerSelectionId(
+                normalizedPath = request.normalizedPath,
+                sizeBytes = request.sizeBytes,
+                occurrenceIndex = request.occurrenceIndex
+            )
+            val selectedFile = keyedFiles.firstOrNull { candidate ->
+                candidate.selectionId == requestedSelectionId
+            } ?: error("Queued torrent selection could not be resolved on fresh provider torrent")
+            val selectedProviderFileIds = listOf(selectedFile.file.id.toString())
+            budget.run {
+                api.selectFiles(
+                    torrentId = addedTorrent.id,
+                    fileIdsCsv = selectedProviderFileIds.joinToString(",")
+                )
+            }
+            ProviderResumeMarker(
+                torrentId = addedTorrent.id,
+                sourceMagnetUri = request.sourceMagnetUri,
+                selectedProviderFileIds = selectedProviderFileIds
+            )
+        }
+
     suspend fun start(locator: ProviderLocator): Result<ProviderResumeMarker> = captureResult {
         val host = budget
             .run { api.getAvailableHosts() }

@@ -44,16 +44,16 @@ class RealDebridFacade internal constructor(
     suspend fun saveValidatedToken(candidate: String): TokenSaveResult =
         tokenService.saveValidatedToken(candidate)
 
-    suspend fun enumerateProviderFiles(
+    suspend fun startAcquisition(request: ProviderSelectionRequest): Result<AcquisitionStatus> =
+        requireUsableToken {
+            acquisitionPoller.start(request)
+        }
+
+    internal suspend fun enumerateProviderFiles(
         request: ProviderInventoryRequest
     ): Result<ProviderInventory> = requireUsableToken {
         inventoryService.enumerate(request)
     }
-
-    suspend fun startAcquisition(locator: ProviderLocator): Result<AcquisitionStatus> =
-        requireUsableToken {
-            acquisitionPoller.start(locator)
-        }
 
     suspend fun resumeAcquisition(marker: ProviderResumeMarker): Result<AcquisitionStatus> =
         requireUsableToken {
@@ -184,6 +184,9 @@ internal class UnwiredRealDebridApi : RealDebridApi {
         throw UnsupportedOperationException("RealDebridFacade is not wired yet")
 
     override suspend fun getTorrentInfo(torrentId: String): TorrentInfoDto =
+        throw UnsupportedOperationException("RealDebridFacade is not wired yet")
+
+    override suspend fun deleteTorrent(torrentId: String): Unit =
         throw UnsupportedOperationException("RealDebridFacade is not wired yet")
 
     override suspend fun unrestrictLink(link: String): UnrestrictedLinkDto =

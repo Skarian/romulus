@@ -4,6 +4,7 @@ import com.romulus.mobile.realdebrid.AcquisitionStatus
 import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.realdebrid.ProviderReadyLink
 import com.romulus.mobile.realdebrid.ProviderResumeMarker
+import com.romulus.mobile.realdebrid.ProviderSelectionRequest
 import com.romulus.mobile.realdebrid.RealDebridApi
 import com.romulus.mobile.realdebrid.TorrentInfoDto
 import com.romulus.mobile.realdebrid.budget.RequestBudget
@@ -14,6 +15,13 @@ internal class ProviderAcquisitionPoller(
     private val budget: RequestBudget,
     private val api: RealDebridApi
 ) {
+    suspend fun start(request: ProviderSelectionRequest): Result<AcquisitionStatus> =
+        captureResult {
+            val marker = selectionService.start(request).getOrThrow()
+            val verifiedMarker = selectionService.verify(marker).getOrThrow()
+            inspect(verifiedMarker)
+        }
+
     suspend fun start(locator: ProviderLocator): Result<AcquisitionStatus> = captureResult {
         val marker = selectionService.start(locator).getOrThrow()
         val verifiedMarker = selectionService.verify(marker).getOrThrow()

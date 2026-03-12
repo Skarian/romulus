@@ -29,7 +29,7 @@ import com.romulus.mobile.downloads.queue.StorageTargetContext
 import com.romulus.mobile.downloads.queue.TaskId
 import com.romulus.mobile.downloads.queue.TransferCheckpoint
 import com.romulus.mobile.realdebrid.AcquisitionStatus
-import com.romulus.mobile.realdebrid.ProviderLocator
+import com.romulus.mobile.realdebrid.ProviderSelectionRequest
 import com.romulus.mobile.realdebrid.ProviderReadyLink
 import com.romulus.mobile.realdebrid.ProviderResumeMarker
 import com.romulus.mobile.realdebrid.ResolvedDownloadUnit
@@ -41,6 +41,7 @@ import com.romulus.mobile.source.browse.SelectableItemId
 import com.romulus.mobile.source.ingest.RenameRule
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
 import java.io.ByteArrayInputStream
 import java.io.Closeable
 import java.io.File
@@ -151,7 +152,7 @@ internal class FakeProviderRuntimeGateway(
     override suspend fun readTokenReadiness(): TokenReadiness = readiness.value
 
     override suspend fun startAcquisition(
-        locator: ProviderLocator
+        request: ProviderSelectionRequest
     ): Result<AcquisitionStatus> = startResult
 
     override suspend fun resumeAcquisition(
@@ -370,13 +371,11 @@ internal fun sampleQueueTaskInput(
     recursiveUnarchiveIntent = recursiveUnarchiveIntent,
     storageTarget = StorageTargetContext(subfolder = "shows"),
     executionContext = QueueExecutionContext.StandardFile(
-        providerLocator = ProviderLocator(
+        selectionIntent = TorrentFileSelectionIntent(
             sourceMagnetUri = "magnet:?xt=urn:btih:test",
-            torrentId = "torrent-1",
-            providerFileIds = listOf("provider-file"),
-            selectedProviderFileId = "provider-file",
-            path = "/shows/$name",
-            partLabel = null
+            normalizedPath = "shows/$name",
+            sizeBytes = 1_024L,
+            occurrenceIndex = 1
         )
     )
 )

@@ -6,7 +6,6 @@ import com.romulus.mobile.downloads.output.OutputCleanupScope
 import com.romulus.mobile.downloads.output.OutputReservation
 import com.romulus.mobile.downloads.output.TempFileToken
 import com.romulus.mobile.realdebrid.ArchiveContainerLocator
-import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.realdebrid.ProviderResumeMarker
 import com.romulus.mobile.remotezip.ArchiveEntryIdentity
 import com.romulus.mobile.source.InstantAsEpochMilliSerializer
@@ -14,6 +13,7 @@ import com.romulus.mobile.source.browse.SelectableItemId
 import com.romulus.mobile.source.ingest.RenameRule
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
 import java.time.Instant
 import kotlinx.serialization.Serializable
 
@@ -37,7 +37,7 @@ data class StorageTargetContext(val subfolder: String)
 @Serializable
 sealed interface QueueExecutionContext {
     @Serializable
-    data class StandardFile(val providerLocator: ProviderLocator) : QueueExecutionContext
+    data class StandardFile(val selectionIntent: TorrentFileSelectionIntent) : QueueExecutionContext
 
     @Serializable
     data class ArchiveEntry(

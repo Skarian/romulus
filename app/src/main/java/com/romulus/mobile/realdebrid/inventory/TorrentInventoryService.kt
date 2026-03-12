@@ -9,6 +9,8 @@ import com.romulus.mobile.realdebrid.TorrentInfoDto
 import com.romulus.mobile.realdebrid.budget.RequestBudget
 import com.romulus.mobile.realdebrid.captureResult
 import com.romulus.mobile.realdebrid.withSelectionIds
+import java.util.LinkedHashSet
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.delay
 import retrofit2.HttpException
 
@@ -18,6 +20,7 @@ internal class TorrentInventoryService(
 ) {
     suspend fun enumerate(request: ProviderInventoryRequest): Result<ProviderInventory> =
         captureResult {
+            val temporaryTorrentIds = LinkedHashSet<String>()
             val files = request.sources.flatMap { source ->
                 val host = budget
                     .run { api.getAvailableHosts() }
@@ -30,6 +33,7 @@ internal class TorrentInventoryService(
                         host = host
                     )
                 }
+                temporaryTorrentIds += addedTorrent.id
                 val info = readTorrentInfoWithRetry(addedTorrent.id)
                 info.files.withSelectionIds().map { candidate ->
                     val providerFileId = candidate.selectionId
@@ -50,6 +54,14 @@ internal class TorrentInventoryService(
                             partLabel = source.partLabel
                         )
                     )
+                }
+            }
+            temporaryTorrentIds.forEach { torrentId ->
+                try {
+                    budget.run { api.deleteTorrent(torrentId) }
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (@Suppress("TooGenericExceptionCaught") _: Exception) {
                 }
             }
             ProviderInventory(files = files)

@@ -2,7 +2,6 @@ package com.romulus.mobile.ui.files
 
 import androidx.lifecycle.SavedStateHandle
 import com.romulus.mobile.downloads.DownloadsFacade
-import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.source.SourceFacade
 import com.romulus.mobile.source.browse.SelectableItem
 import com.romulus.mobile.source.browse.SelectableItemId
@@ -10,6 +9,7 @@ import com.romulus.mobile.source.browse.SelectableItemSourceContext
 import com.romulus.mobile.source.browse.SelectionPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -135,13 +135,11 @@ class FilesViewModelTest {
                 partLabel = null,
                 providerFileId = "provider-file"
             ),
-            providerLocator = ProviderLocator(
+            selectionIntent = TorrentFileSelectionIntent(
                 sourceMagnetUri = "magnet:?xt=urn:btih:test",
-                torrentId = "torrent",
-                providerFileIds = listOf("provider-file"),
-                selectedProviderFileId = "provider-file",
-                path = name,
-                partLabel = null
+                normalizedPath = name,
+                sizeBytes = 1024L,
+                occurrenceIndex = 1
             )
         )
 

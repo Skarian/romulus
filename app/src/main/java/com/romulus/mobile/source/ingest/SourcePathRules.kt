@@ -30,11 +30,11 @@ internal fun normalizePath(raw: String?): String? {
 
 internal fun isArchiveSelectionPath(path: String): Boolean = path.lowercase().endsWith(ZIP_SUFFIX)
 
-internal fun ProviderFileRecord.isWithinScope(scope: String): Boolean {
+internal fun String.isWithinScope(scope: String): Boolean {
     if (scope == ROOT_PATH) {
         return true
     }
-    val normalizedProviderPath = path
+    val normalizedProviderPath = this
         .replace('\\', PATH_SEPARATOR)
         .let { value -> if (value.startsWith(ROOT_PATH)) value else "$ROOT_PATH$value" }
     return if (scope.endsWith(PATH_SEPARATOR)) {
@@ -43,6 +43,8 @@ internal fun ProviderFileRecord.isWithinScope(scope: String): Boolean {
         normalizedProviderPath == scope
     }
 }
+
+internal fun ProviderFileRecord.isWithinScope(scope: String): Boolean = path.isWithinScope(scope)
 
 internal fun String.matchesIgnoreRules(ignoreGlobs: List<String>): Boolean {
     val basename = substringAfterLast(PATH_SEPARATOR).substringAfterLast('\\').lowercase()

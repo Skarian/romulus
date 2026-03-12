@@ -1,32 +1,22 @@
 package com.romulus.mobile.source.browse
 
-import com.romulus.mobile.realdebrid.ProviderInventory
-import com.romulus.mobile.realdebrid.ProviderInventoryRequest
-import com.romulus.mobile.realdebrid.ProviderSourceRef
 import com.romulus.mobile.source.ingest.isWithinScope
 import com.romulus.mobile.source.ingest.matchesIgnoreRules
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceSnapshotEntry
+import com.romulus.mobile.source.torrentmeta.TorrentMetadataFileRecord
+import com.romulus.mobile.source.torrentmeta.TorrentMetadataInventory
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
-private typealias ProviderInventoryEnumerator =
-    suspend (ProviderInventoryRequest) -> Result<ProviderInventory>
+private typealias TorrentMetadataEnumerator =
+    suspend (SnapshotId, SourceSnapshotEntry) -> Result<TorrentMetadataInventory>
 
 internal class StandardBrowseBuilder(
-    private val enumerateProviderFiles: ProviderInventoryEnumerator
+    private val enumerateTorrentMetadata: TorrentMetadataEnumerator
 ) {
     suspend fun build(snapshotId: SnapshotId, entry: SourceSnapshotEntry): BrowseResult {
-        val inventory = enumerateProviderFiles(
-            ProviderInventoryRequest(
-                sources = entry.torrents.map { torrent ->
-                    ProviderSourceRef(
-                        magnetUri = torrent.magnetUri,
-                        partLabel = torrent.partLabel
-                    )
-                }
-            )
-        ).getOrElse { error ->
+        val inventory = enumerateTorrentMetadata(snapshotId, entry).getOrElse { error ->
             return BrowseResult.Failed(
                 BrowseFailure.StandardResolver(
                     error.message ?: "Source files could not be resolved."
@@ -35,7 +25,7 @@ internal class StandardBrowseBuilder(
         }
 
         val items = inventory.files
-            .filter { file -> file.isWithinScope(entry.normalizedPath) }
+            .filter { file -> file.path.isWithinScope(entry.normalizedPath) }
             .filterNot { file -> file.originalName.matchesIgnoreRules(entry.ignoreGlobs) }
             .sortedBy { file -> file.originalName.lowercase() }
             .map { file ->
@@ -60,24 +50,22 @@ internal class StandardBrowseBuilder(
                         entryDisplayName = entry.displayName,
                         outputSubfolder = entry.subfolder,
                         partLabel = file.partLabel,
-                        providerFileId = file.providerFileId
+                        providerFileId = null
                     ),
-                    providerLocator = file.locator
+                    selectionIntent = file.selectionIntent
                 )
             }
 
         return BrowseResult.Loaded(mode = BrowseMode.STANDARD, items = items)
     }
 
-    private fun stableItemId(
-        entry: SourceSnapshotEntry,
-        file: com.romulus.mobile.realdebrid.ProviderFileRecord
-    ): String {
+    private fun stableItemId(entry: SourceSnapshotEntry, file: TorrentMetadataFileRecord): String {
         val seed = listOf(
             entry.entryId.value,
-            file.locator.sourceMagnetUri,
-            file.path,
-            file.locator.selectedProviderFileId
+            file.selectionIntent.sourceMagnetUri,
+            file.selectionIntent.normalizedPath,
+            file.selectionIntent.sizeBytes?.toString() ?: "unknown",
+            file.selectionIntent.occurrenceIndex.toString()
         ).joinToString("|")
         return UUID.nameUUIDFromBytes(seed.toByteArray(StandardCharsets.UTF_8)).toString()
     }

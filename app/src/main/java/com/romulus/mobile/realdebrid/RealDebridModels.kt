@@ -32,6 +32,14 @@ data class ProviderLocator(
 data class ProviderInventory(val files: List<ProviderFileRecord>)
 
 @Serializable
+data class ProviderSelectionRequest(
+    val sourceMagnetUri: String,
+    val normalizedPath: String,
+    val sizeBytes: Long?,
+    val occurrenceIndex: Int
+)
+
+@Serializable
 data class ProviderResumeMarker(
     val torrentId: String,
     val sourceMagnetUri: String,

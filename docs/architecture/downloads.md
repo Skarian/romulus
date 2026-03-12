@@ -355,7 +355,7 @@ data class StorageTargetContext(
 
 sealed interface QueueExecutionContext {
     data class StandardFile(
-        val providerLocator: ProviderLocator
+        val selectionIntent: TorrentFileSelectionIntent
     ) : QueueExecutionContext
 
     data class ArchiveEntry(

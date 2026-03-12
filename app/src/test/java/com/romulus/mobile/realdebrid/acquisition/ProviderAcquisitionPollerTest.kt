@@ -5,12 +5,11 @@ import com.romulus.mobile.realdebrid.AddedMagnetDto
 import com.romulus.mobile.realdebrid.AvailableHostDto
 import com.romulus.mobile.realdebrid.FakeRealDebridApi
 import com.romulus.mobile.realdebrid.MutableClock
-import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.realdebrid.ProviderResumeMarker
+import com.romulus.mobile.realdebrid.ProviderSelectionRequest
 import com.romulus.mobile.realdebrid.TorrentFileDto
 import com.romulus.mobile.realdebrid.TorrentInfoDto
 import com.romulus.mobile.realdebrid.normalizeProviderPath
-import com.romulus.mobile.realdebrid.providerSelectionId
 import com.romulus.mobile.realdebrid.budget.RequestBudget
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -57,13 +56,11 @@ class ProviderAcquisitionPollerTest {
         )
 
         val result = poller.start(
-            ProviderLocator(
+            ProviderSelectionRequest(
                 sourceMagnetUri = "magnet:?xt=urn:btih:source",
-                torrentId = "browse-torrent",
-                providerFileIds = listOf(selectionId("Show/file-a.mkv")),
-                selectedProviderFileId = selectionId("Show/file-a.mkv"),
-                path = "Show/file-a.mkv",
-                partLabel = null
+                normalizedPath = normalizeProviderPath("Show/file-a.mkv"),
+                sizeBytes = null,
+                occurrenceIndex = 1
             )
         ).getOrThrow()
 
@@ -113,13 +110,11 @@ class ProviderAcquisitionPollerTest {
         )
 
         val result = poller.start(
-            ProviderLocator(
+            ProviderSelectionRequest(
                 sourceMagnetUri = "magnet:?xt=urn:btih:source",
-                torrentId = "browse-torrent",
-                providerFileIds = listOf(selectionId("Show/file-a.mkv")),
-                selectedProviderFileId = selectionId("Show/file-a.mkv"),
-                path = "Show/file-a.mkv",
-                partLabel = null
+                normalizedPath = normalizeProviderPath("Show/file-a.mkv"),
+                sizeBytes = null,
+                occurrenceIndex = 1
             )
         ).getOrThrow()
 
@@ -216,10 +211,4 @@ class ProviderAcquisitionPollerTest {
             result.exceptionOrNull()?.message
         )
     }
-
-    private fun selectionId(path: String): String = providerSelectionId(
-        normalizedPath = normalizeProviderPath(path),
-        sizeBytes = null,
-        occurrenceIndex = 1
-    )
 }

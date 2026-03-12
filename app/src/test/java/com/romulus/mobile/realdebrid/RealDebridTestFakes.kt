@@ -76,6 +76,7 @@ internal class FakeRealDebridApi : RealDebridApi {
         AvailableHostDto(host = "rd-host")
     )
     val addMagnetCalls = mutableListOf<AddMagnetCall>()
+    val deleteTorrentCalls = mutableListOf<String>()
     val selectFilesCalls = mutableListOf<SelectFilesCall>()
     val torrentInfoCalls = mutableListOf<String>()
     val unrestrictCalls = mutableListOf<String>()
@@ -118,6 +119,10 @@ internal class FakeRealDebridApi : RealDebridApi {
         } else {
             queue.first()
         }
+    }
+
+    override suspend fun deleteTorrent(torrentId: String) {
+        deleteTorrentCalls += torrentId
     }
 
     override suspend fun unrestrictLink(link: String): UnrestrictedLinkDto {

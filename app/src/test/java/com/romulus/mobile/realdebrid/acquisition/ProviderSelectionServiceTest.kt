@@ -4,13 +4,12 @@ import com.romulus.mobile.realdebrid.AddedMagnetDto
 import com.romulus.mobile.realdebrid.AvailableHostDto
 import com.romulus.mobile.realdebrid.FakeRealDebridApi
 import com.romulus.mobile.realdebrid.MutableClock
-import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.realdebrid.SelectFilesCall
+import com.romulus.mobile.realdebrid.ProviderSelectionRequest
 import com.romulus.mobile.realdebrid.TorrentFileDto
 import com.romulus.mobile.realdebrid.TorrentInfoDto
 import com.romulus.mobile.realdebrid.ProviderResumeMarker
 import com.romulus.mobile.realdebrid.normalizeProviderPath
-import com.romulus.mobile.realdebrid.providerSelectionId
 import com.romulus.mobile.realdebrid.budget.RequestBudget
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -41,23 +40,11 @@ class ProviderSelectionServiceTest {
         )
 
         val marker = service.start(
-            ProviderLocator(
+            ProviderSelectionRequest(
                 sourceMagnetUri = "magnet:?xt=urn:btih:source",
-                torrentId = "browse-torrent",
-                providerFileIds = listOf(
-                    providerSelectionId(
-                        normalizedPath = normalizeProviderPath("Show/file-a.mkv"),
-                        sizeBytes = null,
-                        occurrenceIndex = 1
-                    )
-                ),
-                selectedProviderFileId = providerSelectionId(
-                    normalizedPath = normalizeProviderPath("Show/file-a.mkv"),
-                    sizeBytes = null,
-                    occurrenceIndex = 1
-                ),
-                path = "Show/file-a.mkv",
-                partLabel = "Part 1"
+                normalizedPath = normalizeProviderPath("Show/file-a.mkv"),
+                sizeBytes = null,
+                occurrenceIndex = 1
             )
         ).getOrThrow()
 

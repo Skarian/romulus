@@ -74,6 +74,7 @@ class TorrentInventoryServiceTest {
             ),
             api.addMagnetCalls
         )
+        assertEquals(listOf("torrent-1", "torrent-2"), api.deleteTorrentCalls)
         assertEquals(2, result.files.size)
         assertEquals("Part 1", result.files[0].partLabel)
         assertEquals("Part 2", result.files[1].partLabel)

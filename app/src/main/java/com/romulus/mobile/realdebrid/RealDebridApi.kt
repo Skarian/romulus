@@ -9,6 +9,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.HttpException
 import retrofit2.Retrofit
+import retrofit2.http.DELETE
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
@@ -24,6 +25,8 @@ internal interface RealDebridApi {
     suspend fun selectFiles(torrentId: String, fileIdsCsv: String)
 
     suspend fun getTorrentInfo(torrentId: String): TorrentInfoDto
+
+    suspend fun deleteTorrent(torrentId: String)
 
     suspend fun unrestrictLink(link: String): UnrestrictedLinkDto
 }
@@ -63,6 +66,12 @@ internal class RetrofitRealDebridApi(
         withAuth { authHeader ->
             endpoints.getTorrentInfo(authHeader, torrentId)
         }
+
+    override suspend fun deleteTorrent(torrentId: String) {
+        withAuth { authHeader ->
+            endpoints.deleteTorrent(authHeader, torrentId)
+        }
+    }
 
     override suspend fun unrestrictLink(link: String): UnrestrictedLinkDto =
         withAuth { authHeader ->
@@ -163,6 +172,12 @@ internal interface AuthenticatedRealDebridEndpoints {
         @Header("Authorization") authHeader: String,
         @Path("id") torrentId: String
     ): TorrentInfoDto
+
+    @DELETE("torrents/delete/{id}")
+    suspend fun deleteTorrent(
+        @Header("Authorization") authHeader: String,
+        @Path("id") torrentId: String
+    )
 
     @FormUrlEncoded
     @POST("unrestrict/link")

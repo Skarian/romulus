@@ -17,7 +17,7 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
 - Persist the active accepted-source record.
 - Stage and publish the latest active snapshot.
 - Expose live source-readiness and home-state projections.
-- Prepare standard browse rows from Real-Debrid inventory.
+- Prepare standard browse rows from locally cached browse inventory keyed by snapshot entry, filling that cache through temporary Real-Debrid enumeration when needed.
 - Prepare archive-selection browse rows from exact `.zip` paths through `remotezip/`.
 - Apply path scope first and ignore rules second before rows reach `ui/files`.
 
@@ -62,7 +62,7 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
   - `ui/home` for home-state observation and refresh.
   - `ui/files` for browse requests.
 - Outbound dependencies:
-  - `realdebrid/` for provider inventory and exact `.zip` container resolution.
+  - `realdebrid/` for standard browse cache fills and exact `.zip` container resolution during archive-selection mode.
   - `remotezip/` for remote ZIP enumeration.
   - `diagnostics/` for accept, refresh, and browse events.
 - What may cross the root-package boundary:
@@ -152,7 +152,8 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
   - output writes.
 - Sibling interaction:
   - consumes active snapshot entries from `source/snapshot`,
-  - uses `realdebrid/` and `remotezip/`.
+  - uses cached standard browse inventory for standard mode,
+  - uses `realdebrid/` and `remotezip/` for archive-selection mode.
 - What may cross this seam:
   - `SelectableItem`,
   - `BrowseMode`,
@@ -161,6 +162,24 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
   - transport clients,
   - queue stores,
   - output reservations.
+
+### `source/torrentmeta`
+
+- Purpose: own torrent-native standard-file selection intent plus the cached standard browse inventory shape.
+- What it owns:
+  - torrent-native file records and selection-intent construction.
+- What it must not own:
+  - Real-Debrid request execution,
+  - browse filtering,
+  - queue creation.
+- Sibling interaction:
+  - feeds cached standard browse inventory into `source/browse`.
+- What may cross this seam:
+  - torrent metadata file records,
+  - torrent-native selection intent.
+- What may not cross this seam:
+  - queue rows,
+  - Real-Debrid models.
 
 ## Internal Files
 
@@ -623,18 +642,56 @@ class BrowseService(
 
 ### `StandardBrowseBuilder.kt`
 - Internal area: `source/browse`
-- Purpose: build standard browse rows from provider inventory.
-- Responsibility: apply path scope first, ignore rules second, and assign stable item ids from source-entry id plus provider file id.
-- Depends on: `RealDebridFacade`
+- Purpose: build standard browse rows from cached standard browse inventory.
+- Responsibility: apply path scope first, ignore rules second, and assign stable item ids from source-entry id plus torrent-native selection intent.
+- Depends on: `CachedStandardBrowseInventoryService`
 - Must not depend on: remote ZIP or queue services
 - Visibility: `internal`
 - Key types/functions:
 
 ```kotlin
 class StandardBrowseBuilder(
-    private val realDebridFacade: RealDebridFacade
+    private val enumerateTorrentMetadata: suspend (SnapshotId, SourceSnapshotEntry) -> Result<TorrentMetadataInventory>
 ) {
     suspend fun build(snapshotId: SnapshotId, entry: SourceSnapshotEntry): BrowseResult
+}
+```
+
+### `CachedStandardBrowseInventoryService.kt`
+- Internal area: `source/browse`
+- Purpose: load standard browse inventory for one snapshot entry, using the local browse cache first and filling it through temporary Real-Debrid enumeration on miss.
+- Responsibility: key cached browse inventory by `snapshotId` plus `entryId`, translate provider inventory into torrent-native selection intent, and keep browse filtering out of the fetch layer.
+- Depends on: `StandardBrowseInventoryCacheStore`, `RealDebridFacade`
+- Must not depend on: queue services or remote ZIP services
+- Visibility: `internal`
+- Key types/functions:
+
+```kotlin
+class CachedStandardBrowseInventoryService(
+    private val cacheStore: StandardBrowseInventoryCacheStore,
+    private val enumerateProviderFiles: suspend (ProviderInventoryRequest) -> Result<ProviderInventory>
+) {
+    suspend fun load(snapshotId: SnapshotId, entry: SourceSnapshotEntry): Result<TorrentMetadataInventory>
+}
+```
+
+### `StandardBrowseInventoryCacheStore.kt`
+- Internal area: `source/browse`
+- Purpose: persist per-snapshot-entry standard browse inventory on-device.
+- Responsibility: hydrate cached browse inventory without touching the provider and write new browse inventory after successful enumeration.
+- Depends on: local app files boundary only
+- Must not depend on: Real-Debrid HTTP or queue services
+- Visibility: `internal`
+- Key types/functions:
+
+```kotlin
+interface StandardBrowseInventoryCacheStore {
+    suspend fun read(snapshotId: SnapshotId, entryId: SourceEntryId): TorrentMetadataInventory?
+    suspend fun write(
+        snapshotId: SnapshotId,
+        entryId: SourceEntryId,
+        inventory: TorrentMetadataInventory
+    ): Result<Unit>
 }
 ```
 
@@ -702,7 +759,7 @@ sealed interface SelectableItem {
         override val sizeBytes: Long?,
         override val selectionPolicy: SelectionPolicy,
         override val sourceContext: SelectableItemSourceContext,
-        val providerLocator: ProviderLocator
+        val selectionIntent: TorrentFileSelectionIntent
     ) : SelectableItem
 
     data class ArchiveEntry(
@@ -745,7 +802,8 @@ sealed interface BrowseFailure {
 
 3. Standard browse:
    - `BrowseService` selects the entry from the active snapshot.
-   - `StandardBrowseBuilder` asks `realdebrid/` for aggregated provider inventory.
+   - `StandardBrowseBuilder` asks the cached standard browse inventory service for that snapshot entry.
+   - On cache miss, `source/` temporarily enumerates provider files through `realdebrid/`, stores the resulting browse inventory locally, and reuses it on later opens for the same snapshot entry.
    - Path scope is applied first.
    - Ignore rules are applied second.
    - Returned rows are sorted alphabetically by original file name.
@@ -824,8 +882,8 @@ sealed interface BrowseFailure {
   - stable standard-file identity assignment
   - alphabetical sort by original file name
 - Fixtures:
-  - fake `RealDebridFacade`
-  - provider inventory fixtures
+  - fake cached inventory enumerator
+  - cached browse inventory fixtures
 
 ### `ArchiveBrowseBuilderTest.kt`
 

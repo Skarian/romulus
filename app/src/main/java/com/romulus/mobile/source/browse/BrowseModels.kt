@@ -1,11 +1,11 @@
 package com.romulus.mobile.source.browse
 
 import com.romulus.mobile.realdebrid.ArchiveContainerLocator
-import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.remotezip.ArchiveEntryIdentity
 import com.romulus.mobile.source.ingest.RenameRule
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -45,7 +45,7 @@ sealed interface SelectableItem {
         override val sizeBytes: Long?,
         override val selectionPolicy: SelectionPolicy,
         override val sourceContext: SelectableItemSourceContext,
-        val providerLocator: ProviderLocator
+        val selectionIntent: TorrentFileSelectionIntent
     ) : SelectableItem
 
     data class ArchiveEntry(

@@ -7,6 +7,8 @@ import com.romulus.mobile.source.browse.BrowseFailure
 import com.romulus.mobile.source.browse.BrowseRequest
 import com.romulus.mobile.source.browse.BrowseResult
 import com.romulus.mobile.source.browse.BrowseService
+import com.romulus.mobile.source.browse.CachedStandardBrowseInventoryService
+import com.romulus.mobile.source.browse.FileStandardBrowseInventoryCacheStore
 import com.romulus.mobile.source.browse.StandardBrowseBuilder
 import com.romulus.mobile.source.ingest.AcceptSourceCommand
 import com.romulus.mobile.source.ingest.AcceptSourceResult
@@ -104,6 +106,13 @@ class SourceFacade internal constructor(
                 validation = validation,
                 clock = clock
             )
+            val standardBrowseInventoryService = CachedStandardBrowseInventoryService(
+                cacheStore = FileStandardBrowseInventoryCacheStore(
+                    cacheDirectory = application.filesDir.resolve("source_browse_cache"),
+                    json = json
+                ),
+                enumerateProviderFiles = realDebridFacade::enumerateProviderFiles
+            )
             return SourceFacade(
                 acceptanceService = SourceAcceptanceService(
                     parser = parser,
@@ -116,7 +125,7 @@ class SourceFacade internal constructor(
                 browseService = BrowseService(
                     snapshotStore = snapshotStore,
                     standardBrowseBuilder = StandardBrowseBuilder(
-                        enumerateProviderFiles = realDebridFacade::enumerateProviderFiles
+                        enumerateTorrentMetadata = standardBrowseInventoryService::load
                     ),
                     archiveBrowseBuilder = ArchiveBrowseBuilder()
                 )

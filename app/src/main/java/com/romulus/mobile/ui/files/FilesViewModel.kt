@@ -280,7 +280,7 @@ class FilesViewModel(
             storageTarget = StorageTargetContext(subfolder = sourceContext.outputSubfolder),
             executionContext = when (this) {
                 is SelectableItem.StandardFile -> QueueExecutionContext.StandardFile(
-                    providerLocator = providerLocator
+                    selectionIntent = selectionIntent
                 )
 
                 is SelectableItem.ArchiveEntry -> QueueExecutionContext.ArchiveEntry(

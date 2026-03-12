@@ -3,9 +3,9 @@
 package com.romulus.mobile.downloads.attempts
 
 import com.romulus.mobile.realdebrid.AcquisitionStatus
-import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.realdebrid.ProviderReadyLink
 import com.romulus.mobile.realdebrid.ProviderResumeMarker
+import com.romulus.mobile.realdebrid.ProviderSelectionRequest
 import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.realdebrid.ResolvedDownloadUnit
 import com.romulus.mobile.realdebrid.auth.TokenReadiness
@@ -16,7 +16,7 @@ internal interface ProviderRuntimeGateway {
 
     suspend fun readTokenReadiness(): TokenReadiness
 
-    suspend fun startAcquisition(locator: ProviderLocator): Result<AcquisitionStatus>
+    suspend fun startAcquisition(request: ProviderSelectionRequest): Result<AcquisitionStatus>
 
     suspend fun resumeAcquisition(marker: ProviderResumeMarker): Result<AcquisitionStatus>
 
@@ -29,8 +29,9 @@ internal class RealDebridProviderRuntimeGateway(private val facade: RealDebridFa
 
     override suspend fun readTokenReadiness(): TokenReadiness = facade.readTokenReadiness()
 
-    override suspend fun startAcquisition(locator: ProviderLocator): Result<AcquisitionStatus> =
-        facade.startAcquisition(locator)
+    override suspend fun startAcquisition(
+        request: ProviderSelectionRequest
+    ): Result<AcquisitionStatus> = facade.startAcquisition(request)
 
     override suspend fun resumeAcquisition(
         marker: ProviderResumeMarker

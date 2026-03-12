@@ -27,8 +27,9 @@ import com.romulus.mobile.downloads.queue.RecoveryDecision
 import com.romulus.mobile.downloads.queue.TransferCheckpoint
 import com.romulus.mobile.realdebrid.AcquisitionStatus
 import com.romulus.mobile.realdebrid.AuthRequiredException
-import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.realdebrid.ProviderReadyLink
+import com.romulus.mobile.realdebrid.ProviderSelectionRequest
+import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
 import java.io.File
 import java.io.FileOutputStream
 import java.time.Clock
@@ -79,7 +80,7 @@ internal class StandardAttemptRunner(
         val readyLink = try {
             acquireReadyLink(
                 taskId = claim.task.taskId,
-                locator = executionContext.providerLocator,
+                selectionIntent = executionContext.selectionIntent,
                 recoveryDecision = recoveryDecision,
                 controlHandle = controlHandle
             )
@@ -185,10 +186,10 @@ internal class StandardAttemptRunner(
         }
     }
 
-    @Suppress("CyclomaticComplexMethod", "ThrowsCount")
+    @Suppress("CyclomaticComplexMethod", "LongMethod", "ThrowsCount")
     private suspend fun acquireReadyLink(
         taskId: com.romulus.mobile.downloads.queue.TaskId,
-        locator: ProviderLocator,
+        selectionIntent: TorrentFileSelectionIntent,
         recoveryDecision: RecoveryDecision,
         controlHandle: ControlHandle
     ): ProviderReadyLink? {
@@ -204,7 +205,14 @@ internal class StandardAttemptRunner(
                 recoveryDecision.metadata.resumeMarker ?: return null
             )
 
-            else -> providerGateway.startAcquisition(locator)
+            else -> providerGateway.startAcquisition(
+                ProviderSelectionRequest(
+                    sourceMagnetUri = selectionIntent.sourceMagnetUri,
+                    normalizedPath = selectionIntent.normalizedPath,
+                    sizeBytes = selectionIntent.sizeBytes,
+                    occurrenceIndex = selectionIntent.occurrenceIndex
+                )
+            )
         }.getOrElse { throwable ->
             throw throwable.toAcquisitionException("Provider acquisition could not start")
         }
