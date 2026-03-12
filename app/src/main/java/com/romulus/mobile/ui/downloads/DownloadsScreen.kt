@@ -70,7 +70,10 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
         }
     }
 
-    ResponsiveScreenContainer(modifier = modifier.fillMaxSize()) { metrics ->
+    ResponsiveScreenContainer(
+        modifier = modifier.fillMaxSize(),
+        compactVerticalPadding = true
+    ) { metrics ->
         Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(metrics.contentSpacing)
@@ -80,21 +83,24 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val summaryLabel = buildSummaryLabel(
+                    completed = state.projection.summary.completed,
+                    total = state.projection.summary.total,
+                    failed = state.projection.summary.failed,
+                    cancelled = state.projection.summary.cancelled
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = "Downloads",
                         style = MaterialTheme.typography.titleMedium
                     )
-                    Text(
-                        text = buildSummaryLabel(
-                            completed = state.projection.summary.completed,
-                            total = state.projection.summary.total,
-                            failed = state.projection.summary.failed,
-                            cancelled = state.projection.summary.cancelled
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (summaryLabel.isNotEmpty()) {
+                        Text(
+                            text = summaryLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 TextButton(onClick = viewModel::openClearHistory) {
                     Text("Clear history")
@@ -392,13 +398,17 @@ private fun orderedActions(actions: Set<QueueActionKind>): List<DownloadActionIt
 }
 
 private fun buildSummaryLabel(completed: Int, total: Int, failed: Int, cancelled: Int): String =
-    buildString {
-        append("$completed/$total completed")
-        if (failed > 0) {
-            append(" • $failed failed")
-        }
-        if (cancelled > 0) {
-            append(" • $cancelled cancelled")
+    if (total == 0) {
+        ""
+    } else {
+        buildString {
+            append("$completed/$total completed")
+            if (failed > 0) {
+                append(" • $failed failed")
+            }
+            if (cancelled > 0) {
+                append(" • $cancelled cancelled")
+            }
         }
     }
 

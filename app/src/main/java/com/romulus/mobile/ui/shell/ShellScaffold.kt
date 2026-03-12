@@ -4,14 +4,19 @@ package com.romulus.mobile.ui.shell
 
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -21,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -114,17 +120,28 @@ fun ShellScaffold(
             Scaffold(
                 modifier = modifier,
                 bottomBar = {
-                    NavigationBar {
+                    NavigationBar(
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        windowInsets = NavigationBarDefaults.windowInsets.only(
+                            WindowInsetsSides.Horizontal
+                        )
+                    ) {
                         NavigationBarItem(
                             selected = route.isHomeLike(),
                             onClick = { shellNavigator.selectTab(ShellRoute.Home) },
                             icon = {
                                 Icon(
                                     imageVector = Icons.Filled.Home,
-                                    contentDescription = "Home"
+                                    contentDescription = "Home",
+                                    modifier = Modifier.size(20.dp)
                                 )
                             },
-                            label = { Text("Home") }
+                            label = {
+                                Text(
+                                    text = "Home",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         )
                         NavigationBarItem(
                             selected = route == ShellRoute.Downloads,
@@ -132,10 +149,16 @@ fun ShellScaffold(
                             icon = {
                                 Icon(
                                     imageVector = Icons.Filled.Download,
-                                    contentDescription = "Downloads"
+                                    contentDescription = "Downloads",
+                                    modifier = Modifier.size(20.dp)
                                 )
                             },
-                            label = { Text("Downloads") }
+                            label = {
+                                Text(
+                                    text = "Downloads",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         )
                         NavigationBarItem(
                             selected = route == ShellRoute.Settings,
@@ -143,10 +166,16 @@ fun ShellScaffold(
                             icon = {
                                 Icon(
                                     imageVector = Icons.Filled.Settings,
-                                    contentDescription = "Settings"
+                                    contentDescription = "Settings",
+                                    modifier = Modifier.size(20.dp)
                                 )
                             },
-                            label = { Text("Settings") }
+                            label = {
+                                Text(
+                                    text = "Settings",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         )
                     }
                 }
@@ -193,7 +222,7 @@ fun ShellScaffold(
                         )
                         FilesScreen(
                             viewModel = filesViewModel,
-                            onNavigateBack = { shellNavigator.selectTab(ShellRoute.Home) },
+                            onNavigateBack = shellNavigator::returnToHomeRoot,
                             onNavigateToDownloads = {
                                 shellNavigator.selectTab(ShellRoute.Downloads)
                             },

@@ -477,7 +477,7 @@ enum class LaunchSource {
 ### `ShellNavigator.kt`
 - Internal area: `app/shell`
 - Purpose: own shell-route state and route transitions.
-- Responsibility: preserve the current shell route across configuration changes and accept app-owned navigation requests.
+- Responsibility: preserve the current shell route across configuration changes, remember the last Home-owned subroute when the user switches tabs, and accept app-owned navigation requests.
 - Depends on: `ShellRouteModels.kt`, `DiagnosticsFacade`
 - Must not depend on: screen-local state
 - Visibility: `public`
@@ -491,6 +491,7 @@ class ShellNavigator(
     fun enterShell(initialRoute: ShellRoute)
     fun selectTab(route: ShellRoute)
     fun openFiles(snapshotId: SnapshotId, entryId: SourceEntryId)
+    fun returnToHomeRoot()
     fun acceptLaunchIntent(intent: AppLaunchIntent?)
 }
 ```

@@ -3,6 +3,7 @@
 package com.romulus.mobile.ui.files
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,7 +49,6 @@ import com.romulus.mobile.ui.formatByteCountOrUnknown
 import com.romulus.mobile.ui.layout.ResponsiveScreenContainer
 import kotlinx.coroutines.launch
 
-@Suppress("UnusedParameter")
 @Composable
 fun FilesScreen(
     viewModel: FilesViewModel,
@@ -67,6 +67,7 @@ fun FilesScreen(
     val selectedDetail = remember(state.rows, detailItemId) {
         state.rows.firstOrNull { row -> row.itemId.value == detailItemId }
     }
+    BackHandler(onBack = onNavigateBack)
 
     ResponsiveScreenContainer(modifier = modifier.fillMaxSize()) { metrics ->
         Column(
@@ -127,6 +128,7 @@ fun FilesScreen(
                             scope.launch {
                                 when (val result = viewModel.queueSelected()) {
                                     is EnqueueResult.Enqueued -> {
+                                        viewModel.clearSelection()
                                         Toast.makeText(
                                             context,
                                             queuedMessage(result.taskIds.size),
@@ -136,6 +138,7 @@ fun FilesScreen(
                                     }
 
                                     is EnqueueResult.EnqueuedPendingDispatch -> {
+                                        viewModel.clearSelection()
                                         Toast.makeText(
                                             context,
                                             result.message,
@@ -224,7 +227,9 @@ fun FilesScreen(
                 }
             }
 
-            if (state.rows.isEmpty() && state.resolverError == null) {
+            if (state.isResolving) {
+                Text("Loading files...")
+            } else if (state.rows.isEmpty() && state.resolverError == null) {
                 Text("No files available")
             } else {
                 LazyColumn(

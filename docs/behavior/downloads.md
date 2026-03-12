@@ -53,23 +53,24 @@
    - `completed/total`,
    - explicit `failed` count when non-zero,
    - explicit `cancelled` count when non-zero.
-18. `total` means all files currently counted in the queue summary (completed + failed + cancelled + active), including rows that may be hidden from the default list after `Clear history`.
-19. State ownership follows [`status-model.md`](status-model.md).
-20. Persistence and recovery guarantees follow [`persistence.md`](persistence.md).
-21. Notification copy and title behavior is defined in [`notifications.md`](notifications.md).
-22. When provider-side acquisition is required, the task enters `Preparing` until links are ready, the user cancels, the provider returns a terminal failure, or the 24-hour cap is reached.
-23. When queue intake came from archive-selection mode, each queue row represents one selected internal file; the outer `.zip` container is not a queue row.
-24. When unarchive intent is enabled and the selected file is a supported archive (`.zip`, `.rar`, `.7z`):
+18. When `total` is zero, the page hides the summary subtitle instead of showing placeholder summary copy.
+19. `total` means all currently visible files counted in the queue summary (completed + failed + cancelled + active); rows hidden by `Clear history` are excluded.
+20. State ownership follows [`status-model.md`](status-model.md).
+21. Persistence and recovery guarantees follow [`persistence.md`](persistence.md).
+22. Notification copy and title behavior is defined in [`notifications.md`](notifications.md).
+23. When provider-side acquisition is required, the task enters `Preparing` until links are ready, the user cancels, the provider returns a terminal failure, or the 24-hour cap is reached.
+24. When queue intake came from archive-selection mode, each queue row represents one selected internal file; the outer `.zip` container is not a queue row.
+25. When unarchive intent is enabled and the selected file is a supported archive (`.zip`, `.rar`, `.7z`):
    - archive contents are extracted,
    - internal archive directories are flattened,
    - extracted non-archive files are written directly into the entry `subfolder`,
    - no dedicated archive-named folder is created.
-25. When recursive unarchive intent is enabled, supported archive outputs from a completed extraction pass are extracted again in bounded additional passes until no supported archive outputs remain.
-26. After successful extraction, the archive file is deleted.
-27. If unarchive intent is enabled but the selected file is not a supported archive, the file is saved normally without extraction.
-28. Naming behavior for normal files and extracted files follows [`naming.md`](naming.md).
-29. Archive-selection queue semantics are defined in [`archive-selection.md`](archive-selection.md).
-30. When diagnostics is enabled, Downloads events are captured:
+26. When recursive unarchive intent is enabled, supported archive outputs from a completed extraction pass are extracted again in bounded additional passes until no supported archive outputs remain.
+27. After successful extraction, the archive file is deleted.
+28. If unarchive intent is enabled but the selected file is not a supported archive, the file is saved normally without extraction.
+29. Naming behavior for normal files and extracted files follows [`naming.md`](naming.md).
+30. Archive-selection queue semantics are defined in [`archive-selection.md`](archive-selection.md).
+31. When diagnostics is enabled, Downloads events are captured:
    - queue-task state transitions,
    - user actions (`Pause`, `Resume`, `Cancel`, `Retry`, `Restart`),
    - clear-history confirmation and outcome.
@@ -112,7 +113,7 @@
 7. Successful clear shows a toast confirmation.
 8. Clear history never targets active states.
 9. Clear history remains available while active downloads run because it only applies to terminal rows.
-10. Clear history changes list visibility only and does not rewrite queue summary counters.
+10. Clear history changes list visibility only and does not delete queue rows, but hidden rows stop contributing to user-facing summary counters.
 11. If user enables `Include failed` and confirms clear, failed rows are intentionally hidden from the default list and their `Retry` or `Restart` actions are no longer shown there.
 12. Hiding failed rows is a deliberate user action, not automatic cleanup.
 13. App provides no hidden-history view and no unhide action; cleared rows stay hidden across normal app restarts.

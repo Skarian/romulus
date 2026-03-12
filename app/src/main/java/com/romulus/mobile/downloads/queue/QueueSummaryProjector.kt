@@ -39,20 +39,20 @@ internal class QueueSummaryProjector(
 }
 
 private fun buildProjection(rows: List<QueueRowRecord>): DownloadsProjection {
+    val visibleRows = rows.filter { row -> row.visibility == QueueVisibility.VISIBLE }
     val summary = QueueSummary(
-        completed = rows.count { row -> row.state == QueueTaskState.Completed },
-        total = rows.size,
-        failed = rows.count { row -> row.state is QueueTaskState.Failed },
-        cancelled = rows.count { row -> row.state is QueueTaskState.Cancelled }
+        completed = visibleRows.count { row -> row.state == QueueTaskState.Completed },
+        total = visibleRows.size,
+        failed = visibleRows.count { row -> row.state is QueueTaskState.Failed },
+        cancelled = visibleRows.count { row -> row.state is QueueTaskState.Cancelled }
     )
-    val visibleRows = rows
-        .filter { row -> row.visibility == QueueVisibility.VISIBLE }
+    val visibleRowStates = visibleRows
         .sortedByDescending { row -> row.task.createdAt }
         .map(::toRowViewState)
 
     return DownloadsProjection(
         summary = summary,
-        rows = visibleRows,
+        rows = visibleRowStates,
         activeDownloads = rows.any { row -> row.state.isActive() }
     )
 }

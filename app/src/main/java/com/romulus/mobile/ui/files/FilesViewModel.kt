@@ -32,6 +32,7 @@ data class FilesRouteArgs(val snapshotId: SnapshotId, val entryId: SourceEntryId
 
 data class FilesUiState(
     val mode: FilesMode,
+    val isResolving: Boolean,
     val rows: List<SelectableRowModel>,
     val selectedIds: Set<SelectableItemId>,
     val preferences: FilePreferencesState,
@@ -69,6 +70,7 @@ class FilesViewModel(
 
     private val resolvedItems = MutableStateFlow<List<SelectableItem>>(emptyList())
     private val mode = MutableStateFlow(FilesMode.STANDARD)
+    private val isResolving = MutableStateFlow(false)
     private val selectedIds = MutableStateFlow<Set<SelectableItemId>>(emptySet())
     private val preferences = MutableStateFlow(FilePreferencesState.disabled())
     private val searchQuery = MutableStateFlow("")
@@ -93,11 +95,13 @@ class FilesViewModel(
 
     val state: StateFlow<FilesUiState> = combine(
         mode,
+        isResolving,
         resolvedItems,
         localState
-    ) { browseMode, items, local ->
+    ) { browseMode, resolving, items, local ->
         buildState(
             browseMode = browseMode,
+            isResolving = resolving,
             items = items,
             selectedIds = local.selectedIds.intersect(items.map { it.itemId }.toSet()),
             filePreferences = local.preferences,
@@ -110,6 +114,7 @@ class FilesViewModel(
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
         initialValue = buildState(
             browseMode = mode.value,
+            isResolving = isResolving.value,
             items = resolvedItems.value,
             selectedIds = selectedIds.value,
             filePreferences = preferences.value,
@@ -125,6 +130,8 @@ class FilesViewModel(
     }
 
     fun retryResolve() {
+        isResolving.value = true
+        resolverError.value = null
         viewModelScope.launch {
             when (
                 val result = sourceFacade.browse(
@@ -146,6 +153,7 @@ class FilesViewModel(
                         selectionPolicy?.let(FilePreferencesState::fromSelectionPolicy)
                             ?: FilePreferencesState.disabled()
                     resolverError.value = null
+                    isResolving.value = false
                 }
 
                 is BrowseResult.Failed -> {
@@ -154,6 +162,7 @@ class FilesViewModel(
                     selectedIds.value = emptySet()
                     preferences.value = FilePreferencesState.disabled()
                     resolverError.value = result.failure.toMessage()
+                    isResolving.value = false
                 }
             }
         }
@@ -203,6 +212,7 @@ class FilesViewModel(
 
     private fun buildState(
         browseMode: FilesMode,
+        isResolving: Boolean,
         items: List<SelectableItem>,
         selectedIds: Set<SelectableItemId>,
         filePreferences: FilePreferencesState,
@@ -219,6 +229,7 @@ class FilesViewModel(
 
         return FilesUiState(
             mode = browseMode,
+            isResolving = isResolving,
             rows = rows,
             selectedIds = selectedIds,
             preferences = filePreferences.normalized(),

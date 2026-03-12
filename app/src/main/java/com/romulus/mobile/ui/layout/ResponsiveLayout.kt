@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
@@ -74,30 +76,44 @@ fun ResponsiveScreenContainer(
     modifier: Modifier = Modifier,
     metrics: ResponsiveMetrics = rememberResponsiveMetrics(),
     scrollable: Boolean = false,
+    respectStatusBar: Boolean = false,
+    compactVerticalPadding: Boolean = false,
     verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(metrics.contentSpacing),
     content: @Composable ColumnScope.(ResponsiveMetrics) -> Unit
 ) {
+    val verticalPadding = if (compactVerticalPadding) {
+        6.dp
+    } else {
+        metrics.verticalPadding
+    }
     val contentModifier = Modifier
         .fillMaxWidth()
         .widthIn(max = metrics.maxContentWidth)
-        .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)
+        .then(if (respectStatusBar) Modifier.statusBarsPadding() else Modifier)
+        .padding(horizontal = metrics.horizontalPadding, vertical = verticalPadding)
     val scrollModifier = if (scrollable) {
         Modifier.verticalScroll(rememberScrollState())
     } else {
         Modifier
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.TopCenter
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground
     ) {
-        Column(
-            modifier = contentModifier.then(scrollModifier),
-            verticalArrangement = verticalArrangement
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.TopCenter
         ) {
-            content(metrics)
+            Column(
+                modifier = contentModifier.then(scrollModifier),
+                verticalArrangement = verticalArrangement
+            ) {
+                content(metrics)
+            }
         }
     }
 }

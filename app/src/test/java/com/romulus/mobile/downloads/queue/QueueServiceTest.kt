@@ -99,7 +99,7 @@ class QueueServiceTest {
     }
 
     @Test
-    fun clearHistoryHidesTerminalRowsButKeepsSummaryTotals() = runTest {
+    fun clearHistoryHidesTerminalRowsAndExcludesThemFromSummaryTotals() = runTest {
         val ledgerFile = createTempDirectory("queue-ledger").toFile().resolve("ledger.json")
         val clock = Clock.fixed(Instant.parse("2026-03-10T19:00:00Z"), ZoneOffset.UTC)
         val store = FileDownloadLedgerStore(
@@ -133,8 +133,8 @@ class QueueServiceTest {
         val hiddenRows = store.readRows(includeHidden = true)
         assertEquals(1, hiddenRows.size)
         assertEquals(QueueVisibility.HIDDEN, hiddenRows.single().visibility)
-        assertEquals(1, projector.observeProjection().value.summary.total)
-        assertEquals(1, projector.observeProjection().value.summary.cancelled)
+        assertEquals(0, projector.observeProjection().value.summary.total)
+        assertEquals(0, projector.observeProjection().value.summary.cancelled)
         assertTrue(projector.observeProjection().value.rows.isEmpty())
     }
 

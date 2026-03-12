@@ -68,9 +68,11 @@
      - torrent-native selection intent for standard mode,
      - outer-zip locator plus archive-entry identity for archive-selection mode.
 33. Starting downloads shows confirmation and routes user to Downloads.
-34. Naming and rename semantics follow [`naming.md`](naming.md).
-35. Post-download unarchive behavior and archive handling follow [`downloads.md`](downloads.md).
-36. When diagnostics is enabled, Files events are captured:
+34. Successful download start clears the current Files-page selection before the user later returns to that source entry.
+35. System back from Files returns the user to Home.
+36. Naming and rename semantics follow [`naming.md`](naming.md).
+37. Post-download unarchive behavior and archive handling follow [`downloads.md`](downloads.md).
+38. When diagnostics is enabled, Files events are captured:
    - file resolution start and outcome,
    - `Retry` action,
    - selection and select-all or select-none actions,

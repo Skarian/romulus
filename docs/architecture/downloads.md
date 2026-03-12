@@ -59,7 +59,7 @@ This package stays intentionally concrete because it owns the most contract-bear
 - `QueueWorkGateState`
   - Runtime gate over new queue claims when auth is broken.
 - `DownloadsProjection`
-  - Owner-backed UI projection with newest-first visible rows, summary counters over all rows, explicit detail fields for updated time, original size, output subfolder, preparing metadata, and running or paused local transfer detail, plus canonical state and allowed actions for row menus.
+  - Owner-backed UI projection with newest-first visible rows, summary counters over visible rows only, explicit detail fields for updated time, original size, output subfolder, preparing metadata, and running or paused local transfer detail, plus canonical state and allowed actions for row menus.
 
 ## Dependencies
 
@@ -1055,7 +1055,7 @@ class DownloadWorkerEntryPoint(
 ### `QueueSummaryProjector.kt`
 - Internal area: `downloads/queue`
 - Purpose: project ledger rows into the Downloads-page view model.
-- Responsibility: sort visible rows newest-first by `createdAt`, keep summary counters over all rows including hidden ones, expose `activeDownloads`, project canonical state and allowed actions for row menus, and project the explicit details required by Downloads row details.
+- Responsibility: sort visible rows newest-first by `createdAt`, keep summary counters over visible rows only, expose `activeDownloads`, project canonical state and allowed actions for row menus, and project the explicit details required by Downloads row details.
 - Depends on: `DownloadLedgerStore`
 - Must not depend on: UI classes or notification APIs
 - Visibility: `internal`
@@ -1237,7 +1237,7 @@ class QueueNotificationPresenter(
 8. Clear history:
    - `QueueService.clearHistory(includeFailed)` targets only terminal visible rows.
    - Matching rows are hidden transactionally in one ledger operation.
-   - Summary counters still include hidden rows.
+   - Hidden rows stop contributing to visible summary counters and notification counters.
    - If the transaction fails, all targeted rows remain visible.
 
 ## Failure and Recovery Rules
@@ -1398,7 +1398,7 @@ class QueueNotificationPresenter(
 - Scope: unit
 - Covers:
   - newest-first ordering uses `createdAt`
-  - summary counters include hidden rows
+  - summary counters exclude hidden rows
   - active-download flag tracks active states only
   - canonical state and allowed actions project without UI-side reverse engineering
   - details projection includes updated timestamp, original file size, output subfolder, preparing metadata, running or paused transfer detail, and output summary

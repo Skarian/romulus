@@ -18,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -40,6 +41,7 @@ import com.romulus.mobile.downloads.config.DownloadSettingsDraft
 import com.romulus.mobile.source.ingest.AcceptSourceCommand
 import com.romulus.mobile.source.ingest.SourceMode
 import com.romulus.mobile.ui.layout.ResponsiveScreenContainer
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
@@ -64,7 +66,7 @@ fun SettingsScreen(
         mutableStateOf(state.sourceSummary?.rawValue.orEmpty())
     }
     var concurrencyDraft by rememberSaveable {
-        mutableStateOf(state.downloadSettings.maxConcurrency.toString())
+        mutableStateOf(state.downloadSettings.maxConcurrency.toFloat())
     }
     var clearDiagnosticsDialogOpen by rememberSaveable { mutableStateOf(false) }
     val allSettingsLocked = !state.lockState.tokenEditable &&
@@ -83,8 +85,8 @@ fun SettingsScreen(
         }
     }
     LaunchedEffect(state.downloadSettings.maxConcurrency) {
-        if (!state.lockState.concurrencyEditable || concurrencyDraft.isBlank()) {
-            concurrencyDraft = state.downloadSettings.maxConcurrency.toString()
+        if (!state.lockState.concurrencyEditable) {
+            concurrencyDraft = state.downloadSettings.maxConcurrency.toFloat()
         }
     }
     LaunchedEffect(viewModel) {
@@ -149,7 +151,8 @@ fun SettingsScreen(
 
     ResponsiveScreenContainer(
         modifier = modifier.fillMaxSize(),
-        scrollable = true
+        scrollable = true,
+        compactVerticalPadding = true
     ) { metrics ->
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -298,24 +301,27 @@ fun SettingsScreen(
                 title = "Download behavior",
                 description = "Queue concurrency for the standard download flow."
             ) {
-                OutlinedTextField(
+                Text(
+                    text = "Max concurrency: ${concurrencyDraft.roundToInt()}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Slider(
                     value = concurrencyDraft,
                     onValueChange = {
-                        concurrencyDraft = it.filter(Char::isDigit)
+                        concurrencyDraft = it.roundToInt().toFloat()
                         viewModel.clearFeedback()
                     },
-                    label = { Text("Max concurrency (1..5)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = state.lockState.concurrencyEditable,
-                    singleLine = true
+                    valueRange = 1f..5f,
+                    steps = 3,
+                    enabled = state.lockState.concurrencyEditable
                 )
                 Button(
                     enabled = state.lockState.concurrencyEditable,
                     onClick = {
-                        val concurrency = concurrencyDraft.toIntOrNull()
+                        val concurrency = concurrencyDraft.roundToInt()
                         val outputDirectory = state.downloadSettings.outputDirectoryUri
                         when {
-                            concurrency == null || concurrency !in 1..5 -> {
+                            concurrency !in 1..5 -> {
                                 viewModel.showFeedback("Concurrency must be between 1 and 5.")
                             }
 
@@ -358,7 +364,7 @@ fun SettingsScreen(
                         Text("Clear diagnostics")
                     }
                     Button(onClick = viewModel::exportDiagnostics) {
-                        Text("Export diagnostics")
+                        Text("Export")
                     }
                 }
             }

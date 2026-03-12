@@ -19,6 +19,51 @@ import org.junit.Test
 
 class QueueSummaryProjectorTest {
     @Test
+    fun summaryCountersExcludeHiddenRows() = runTest {
+        val clock = Clock.fixed(Instant.parse("2026-03-12T12:00:00Z"), ZoneOffset.UTC)
+        val store = FileDownloadLedgerStore(
+            ledgerFile = createTempDirectory("projection-ledger").toFile().resolve("ledger.json"),
+            json = queueJson(),
+            clock = clock
+        )
+        val completedTask = sampleQueueTask(
+            taskId = TaskId("completed-task"),
+            createdAt = Instant.parse("2026-03-12T12:00:00Z"),
+            name = "Completed.mkv"
+        )
+        val runningTask = sampleQueueTask(
+            taskId = TaskId("running-task"),
+            createdAt = Instant.parse("2026-03-12T12:01:00Z"),
+            name = "Running.mkv"
+        )
+        store.insertTasks(listOf(completedTask, runningTask)).getOrThrow()
+        store.persistState(completedTask.taskId, QueueTaskState.Completed).getOrThrow()
+        store.persistState(
+            runningTask.taskId,
+            QueueTaskState.Running(
+                TransferCheckpoint(
+                    downloadedBytes = 128,
+                    totalBytes = 512,
+                    lastPersistedAt = Instant.parse("2026-03-12T12:01:30Z"),
+                    tempFileToken = null,
+                    resumeByteOffset = 128
+                )
+            )
+        ).getOrThrow()
+        store.hideTerminalRowsAtomically(listOf(completedTask.taskId)).getOrThrow()
+        val projector = QueueSummaryProjector(
+            ledgerStore = store,
+            dispatcher = Dispatchers.Unconfined
+        )
+
+        val projection = projector.observeProjection().value
+
+        assertEquals(0, projection.summary.completed)
+        assertEquals(1, projection.summary.total)
+        assertEquals(listOf(runningTask.taskId), projection.rows.map { row -> row.taskId })
+    }
+
+    @Test
     fun supportedArchivesUseManifestPreviewButUnsupportedFilesKeepDirectSaveName() = runTest {
         val clock = Clock.fixed(Instant.parse("2026-03-10T21:00:00Z"), ZoneOffset.UTC)
         val store = FileDownloadLedgerStore(

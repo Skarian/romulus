@@ -89,7 +89,9 @@ These entry points are consumed only by `app/`.
 - What it owns:
   - tab layout,
   - shell-level snackbar host,
-  - route-to-screen rendering.
+  - route-to-screen rendering,
+  - restoring the last Home-owned subroute when the user returns to the `Home` tab,
+  - compact shell spacing so rotated phone layouts keep usable content height.
 - What it must not own:
   - startup routing,
   - notification deep-link parsing,
@@ -247,7 +249,7 @@ fun ShellScaffold(
 ### `SetupScreen.kt`
 - Internal area: `ui/setup`
 - Purpose: render the first-run form.
-- Responsibility: show edits, picker results, validation errors, and submit progress.
+- Responsibility: show edits, picker results, validation errors, and submit progress while respecting the same safe top inset used by the shell-hosted screens, visually grouping the setup sections, and exposing the Real-Debrid token helper link.
 - Depends on: `SetupViewModel`
 - Must not depend on: stores or raw platform APIs
 - Visibility: `public`
@@ -530,7 +532,7 @@ class DownloadsViewModel(
 ### `SettingsScreen.kt`
 - Internal area: `ui/settings`
 - Purpose: render editable settings sections and diagnostics controls.
-- Responsibility: keep the current settings layout while reflecting field-specific locks correctly.
+- Responsibility: keep the current settings layout while reflecting field-specific locks correctly, use a discrete slider for concurrency, and expose compact diagnostics actions.
 - Depends on: `SettingsViewModel`
 - Must not depend on: stores or raw platform APIs
 - Visibility: `public`

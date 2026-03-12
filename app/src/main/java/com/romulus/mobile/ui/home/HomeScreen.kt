@@ -51,7 +51,10 @@ fun HomeScreen(
         }
     }
 
-    ResponsiveScreenContainer(modifier = modifier.fillMaxSize()) { metrics ->
+    ResponsiveScreenContainer(
+        modifier = modifier.fillMaxSize(),
+        compactVerticalPadding = true
+    ) { metrics ->
         Column(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(metrics.contentSpacing)
