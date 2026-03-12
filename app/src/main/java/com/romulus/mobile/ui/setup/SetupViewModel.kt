@@ -83,6 +83,10 @@ class SetupViewModel(
         )
     }
 
+    fun showError(message: String) {
+        mutableState.value = mutableState.value.copy(errorMessage = message)
+    }
+
     fun submit() {
         val draft = state.value
         val validationError = validate(draft)

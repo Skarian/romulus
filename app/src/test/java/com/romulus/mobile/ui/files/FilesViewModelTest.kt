@@ -2,7 +2,12 @@ package com.romulus.mobile.ui.files
 
 import androidx.lifecycle.SavedStateHandle
 import com.romulus.mobile.downloads.DownloadsFacade
+import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.source.SourceFacade
+import com.romulus.mobile.source.browse.SelectableItem
+import com.romulus.mobile.source.browse.SelectableItemId
+import com.romulus.mobile.source.browse.SelectableItemSourceContext
+import com.romulus.mobile.source.browse.SelectionPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +23,51 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FilesViewModelTest {
+    @Test
+    fun selectAllAndNoneOnlyChangeVisibleRows() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        try {
+            val viewModel = FilesViewModel(
+                routeArgs = FilesRouteArgs(
+                    snapshotId = SnapshotId("snapshot"),
+                    entryId = SourceEntryId("entry")
+                ),
+                sourceFacade = SourceFacade(),
+                downloadsFacade = DownloadsFacade(),
+                savedStateHandle = SavedStateHandle()
+            )
+            advanceUntilIdle()
+
+            val hiddenId = SelectableItemId("hidden")
+            val visibleId = SelectableItemId("visible")
+            setMutableStateFlowValue(
+                viewModel,
+                "resolvedItems",
+                listOf(
+                    selectableItem(itemId = hiddenId, name = "Hidden file"),
+                    selectableItem(itemId = visibleId, name = "Visible file")
+                )
+            )
+            setMutableStateFlowValue(viewModel, "selectedIds", setOf(hiddenId))
+            viewModel.updateSearchQuery("Visible")
+            advanceUntilIdle()
+
+            viewModel.selectAllVisible()
+            assertEquals(
+                setOf(hiddenId, visibleId),
+                readMutableStateFlowValue<Set<SelectableItemId>>(viewModel, "selectedIds")
+            )
+
+            viewModel.deselectVisible()
+            assertEquals(
+                setOf(hiddenId),
+                readMutableStateFlowValue<Set<SelectableItemId>>(viewModel, "selectedIds")
+            )
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     @Test
     fun browseFailureResetsModeAndPreferences() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
@@ -63,6 +113,37 @@ class FilesViewModelTest {
             Dispatchers.resetMain()
         }
     }
+
+    private fun selectableItem(itemId: SelectableItemId, name: String): SelectableItem.StandardFile =
+        SelectableItem.StandardFile(
+            itemId = itemId,
+            snapshotId = SnapshotId("snapshot"),
+            entryId = SourceEntryId("entry"),
+            originalDisplayName = name,
+            sizeBytes = 1024L,
+            selectionPolicy = SelectionPolicy(
+                renameRule = null,
+                renameAvailable = false,
+                unarchiveToggleVisible = false,
+                unarchiveDefault = false,
+                recursiveToggleVisible = false,
+                recursiveUnarchiveDefault = false
+            ),
+            sourceContext = SelectableItemSourceContext(
+                entryDisplayName = "Entry",
+                outputSubfolder = "folder",
+                partLabel = null,
+                providerFileId = "provider-file"
+            ),
+            providerLocator = ProviderLocator(
+                sourceMagnetUri = "magnet:?xt=urn:btih:test",
+                torrentId = "torrent",
+                providerFileIds = listOf("provider-file"),
+                selectedProviderFileId = "provider-file",
+                path = name,
+                partLabel = null
+            )
+        )
 
     @Suppress("UNCHECKED_CAST")
     private fun <T> setMutableStateFlowValue(instance: Any, fieldName: String, value: T) {

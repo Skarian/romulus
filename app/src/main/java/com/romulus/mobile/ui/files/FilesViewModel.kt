@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.romulus.mobile.ui.files
 
 import androidx.lifecycle.SavedStateHandle
@@ -46,8 +48,9 @@ enum class FilesMode {
 data class SelectableRowModel(
     val itemId: SelectableItemId,
     val originalDisplayName: String,
-    val sizeLabel: String,
-    val partLabel: String?
+    val sizeBytes: Long?,
+    val partLabel: String?,
+    val providerFileId: String?
 )
 
 class FilesViewModel(
@@ -169,8 +172,13 @@ class FilesViewModel(
     }
 
     fun selectAllVisible() {
-        val visibleIds = state.value.rows.map(SelectableRowModel::itemId)
-        selectedIds.value = visibleIds.toSet()
+        val visibleIds = currentVisibleRows().map(SelectableRowModel::itemId)
+        selectedIds.value = selectedIds.value + visibleIds
+    }
+
+    fun deselectVisible() {
+        val visibleIds = currentVisibleRows().map(SelectableRowModel::itemId).toSet()
+        selectedIds.value = selectedIds.value - visibleIds
     }
 
     fun clearSelection() {
@@ -220,6 +228,17 @@ class FilesViewModel(
         )
     }
 
+    private fun currentVisibleRows(): List<SelectableRowModel> {
+        val query = searchQuery.value
+        val visibleItems = resolvedItems.value.filter { item ->
+            query.isBlank() ||
+                item.originalDisplayName.contains(query, ignoreCase = true)
+        }
+        return visibleItems.map { item ->
+            item.toRowModel()
+        }
+    }
+
     private fun BrowseFailure.toMessage(): String = when (this) {
         is BrowseFailure.MissingEntry -> "Source entry ${entryId.value} is missing."
         is BrowseFailure.StandardResolver -> message
@@ -230,8 +249,9 @@ class FilesViewModel(
     private fun SelectableItem.toRowModel(): SelectableRowModel = SelectableRowModel(
         itemId = itemId,
         originalDisplayName = originalDisplayName,
-        sizeLabel = sizeBytes?.toString() ?: "Unknown size",
-        partLabel = sourceContext.partLabel
+        sizeBytes = sizeBytes,
+        partLabel = sourceContext.partLabel,
+        providerFileId = sourceContext.providerFileId
     )
 
     private fun SelectableItem.toQueueTaskInput(preferences: FilePreferencesState): QueueTaskInput =

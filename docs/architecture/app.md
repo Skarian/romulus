@@ -75,6 +75,7 @@ This package doc uses structural pseudocode by default. Full pseudocode bodies a
 
 - `AppGraph.create(application: Application): AppGraph`
 - `StartupSessionViewModel.startOnce(request: StartupBootstrapRequest): Unit`
+- `StartupSessionViewModel.completeSetup(initialRoute: ShellRoute): Unit`
 - `StartupBootstrapper.bootstrap(request: StartupBootstrapRequest): StartupRouteDecision`
 - `AppReadinessCoordinator.observeShellReadiness(): StateFlow<ShellReadiness>`
 - `SetupSubmissionCoordinator.submit(draft: SetupDraft): SetupSubmissionResult`
@@ -219,7 +220,7 @@ class MainActivity : ComponentActivity() {
                 onPersistSourceGrant = appGraph.uriGrantRegistry::captureSourceGrant,
                 onPersistOutputGrant = appGraph.uriGrantRegistry::captureOutputGrant,
                 onSetupCompleted = {
-                    appGraph.shellNavigator.enterShell(ShellRoute.Home)
+                    startupSessionViewModel.completeSetup(ShellRoute.Home)
                     appGraph.notificationPermissionRequester.requestIfNeeded()
                 }
             )
@@ -299,6 +300,7 @@ class StartupSessionViewModel(
     val state: StateFlow<StartupSessionState>
 
     fun startOnce(request: StartupBootstrapRequest)
+    fun completeSetup(initialRoute: ShellRoute)
 
     companion object {
         fun factory(startupBootstrapper: StartupBootstrapper): ViewModelProvider.Factory
@@ -568,7 +570,8 @@ class NotificationPermissionRequester {
    - `ui/setup` submits `SetupDraft` to `SetupSubmissionCoordinator`.
    - `SetupSubmissionCoordinator` validates and saves the API key first, then accepts the source, then saves download settings.
    - `SetupStateStore` is marked complete only after all three owner operations succeed.
-   - The host calls `ShellNavigator.enterShell(ShellRoute.Home)`.
+   - The host calls `StartupSessionViewModel.completeSetup(ShellRoute.Home)`.
+   - `ui/shell` observes the startup-session transition into `StartupRouteDecision.Shell(...)` and aligns `ShellNavigator` with that initial route.
    - Notification permission is requested once.
 
 4. Mid-session settings breakage:
@@ -616,6 +619,7 @@ class NotificationPermissionRequester {
   - bootstrap runs once for one cold-launch token even if the host recomposes
   - repeated `startOnce` calls with the same token do not replay cold-launch refresh
   - completed bootstrap publishes the route decision for the shell host
+  - successful setup completion transitions the same host session from `Setup` to `Shell`
 - Fixtures:
   - fake `StartupBootstrapper`
 

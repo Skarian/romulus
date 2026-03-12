@@ -2,6 +2,7 @@ package com.romulus.mobile.realdebrid.links
 
 import com.romulus.mobile.realdebrid.AcquisitionStatus
 import com.romulus.mobile.realdebrid.AddedMagnetDto
+import com.romulus.mobile.realdebrid.AvailableHostDto
 import com.romulus.mobile.realdebrid.FakeRealDebridApi
 import com.romulus.mobile.realdebrid.MutableClock
 import com.romulus.mobile.realdebrid.ProviderInventoryRequest
@@ -24,7 +25,7 @@ class ExactZipResolverTest {
     @Test
     fun resolvesExactZipLocatorFromInventoryAndAcquisition() = runTest {
         val api = FakeRealDebridApi().apply {
-            availableHosts = listOf("host-a")
+            availableHosts = listOf(AvailableHostDto(host = "host-a"))
             enqueueAddedMagnet(AddedMagnetDto(id = "browse-torrent"))
             enqueueAddedMagnet(AddedMagnetDto(id = "download-torrent"))
             enqueueTorrentInfo(
@@ -112,7 +113,7 @@ class ExactZipResolverTest {
     @Test
     fun failsWhenExactPathIsMissing() = runTest {
         val api = FakeRealDebridApi().apply {
-            availableHosts = listOf("host-a")
+            availableHosts = listOf(AvailableHostDto(host = "host-a"))
             enqueueAddedMagnet(AddedMagnetDto(id = "browse-torrent"))
             enqueueTorrentInfo(
                 "browse-torrent",

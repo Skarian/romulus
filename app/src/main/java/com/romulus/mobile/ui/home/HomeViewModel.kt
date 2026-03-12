@@ -176,8 +176,7 @@ class HomeViewModel(
                     }
                 val rows = candidateRows.filter { row ->
                     searchQuery.isBlank() ||
-                        row.displayName.contains(searchQuery, ignoreCase = true) ||
-                        row.folderContext.contains(searchQuery, ignoreCase = true)
+                        row.displayName.contains(searchQuery, ignoreCase = true)
                 }
                 HomeUiState(
                     mode = HomeMode.Content(

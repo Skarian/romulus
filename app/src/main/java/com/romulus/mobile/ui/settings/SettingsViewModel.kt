@@ -19,9 +19,12 @@ import com.romulus.mobile.source.ingest.AcceptSourceCommand
 import com.romulus.mobile.source.ingest.AcceptSourceResult
 import com.romulus.mobile.source.ingest.SourceValidationIssue
 import com.romulus.mobile.source.snapshot.AcceptedSourceSummary
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -42,6 +45,10 @@ data class SettingsUiState(
     val feedbackMessage: String?
 )
 
+sealed interface SettingsEffect {
+    data class Message(val message: String) : SettingsEffect
+}
+
 @Suppress("LongParameterList")
 class SettingsViewModel(
     private val shellReadiness: StateFlow<ShellReadiness>,
@@ -60,6 +67,8 @@ class SettingsViewModel(
     )
 
     private val feedbackMessage = MutableStateFlow<String?>(null)
+    private val mutableEffects = MutableSharedFlow<SettingsEffect>()
+    val effects: Flow<SettingsEffect> = mutableEffects.asSharedFlow()
 
     init {
         savedStateHandle.keys()
@@ -119,29 +128,60 @@ class SettingsViewModel(
 
     fun saveApiKey(candidate: String) {
         viewModelScope.launch {
-            feedbackMessage.value = when (
-                val result = realDebridFacade.saveValidatedToken(candidate)
-            ) {
-                TokenSaveResult.Saved -> null
-                is TokenSaveResult.Rejected -> result.message
-                is TokenSaveResult.Failed -> result.message
+            when (val result = realDebridFacade.saveValidatedToken(candidate)) {
+                TokenSaveResult.Saved -> {
+                    feedbackMessage.value = null
+                    mutableEffects.emit(SettingsEffect.Message("API key saved."))
+                }
+
+                is TokenSaveResult.Rejected -> {
+                    feedbackMessage.value = result.message
+                }
+
+                is TokenSaveResult.Failed -> {
+                    feedbackMessage.value = result.message
+                }
             }
         }
     }
 
     fun saveSource(command: AcceptSourceCommand) {
         viewModelScope.launch {
-            feedbackMessage.value = when (val result = sourceFacade.accept(command)) {
-                is AcceptSourceResult.Accepted -> null
-                is AcceptSourceResult.Rejected -> result.toSettingsFeedbackMessage()
-                is AcceptSourceResult.Failed -> result.message
+            when (val result = sourceFacade.accept(command)) {
+                is AcceptSourceResult.Accepted -> {
+                    feedbackMessage.value = null
+                    mutableEffects.emit(SettingsEffect.Message("Source saved."))
+                }
+
+                is AcceptSourceResult.Rejected -> {
+                    feedbackMessage.value = result.toSettingsFeedbackMessage()
+                }
+
+                is AcceptSourceResult.Failed -> {
+                    feedbackMessage.value = result.message
+                }
             }
         }
     }
 
     fun saveDownloadSettings(draft: DownloadSettingsDraft) {
         viewModelScope.launch {
-            feedbackMessage.value = downloadsFacade.updateSettings(draft).exceptionOrNull()?.message
+            val previousOutputDirectory = downloadsFacade.observeSettings().value.outputDirectoryUri
+            val failure = downloadsFacade.updateSettings(draft).exceptionOrNull()
+            if (failure == null) {
+                feedbackMessage.value = null
+                mutableEffects.emit(
+                    SettingsEffect.Message(
+                        if (draft.outputDirectoryUri == previousOutputDirectory) {
+                            "Concurrency saved."
+                        } else {
+                            "Download directory saved."
+                        }
+                    )
+                )
+            } else {
+                feedbackMessage.value = failure.message
+            }
         }
     }
 
@@ -153,21 +193,55 @@ class SettingsViewModel(
 
     fun clearDiagnostics() {
         viewModelScope.launch {
-            feedbackMessage.value = when (val result = diagnosticsFacade.clear()) {
-                DiagnosticsClearResult.Cleared -> null
-                is DiagnosticsClearResult.Failed -> result.message
+            when (val result = diagnosticsFacade.clear()) {
+                DiagnosticsClearResult.Cleared -> {
+                    feedbackMessage.value = null
+                    mutableEffects.emit(SettingsEffect.Message("Diagnostics cleared."))
+                }
+
+                is DiagnosticsClearResult.Failed -> {
+                    feedbackMessage.value = result.message
+                    mutableEffects.emit(SettingsEffect.Message(result.message))
+                }
             }
         }
     }
 
     fun exportDiagnostics() {
         viewModelScope.launch {
-            feedbackMessage.value = when (val result = diagnosticsFacade.export()) {
-                is DiagnosticsExportResult.Exported -> null
-                is DiagnosticsExportResult.ExportedWithRetentionFailure -> result.message
-                is DiagnosticsExportResult.Failed -> result.message
+            when (val result = diagnosticsFacade.export()) {
+                is DiagnosticsExportResult.Exported -> {
+                    feedbackMessage.value = null
+                    mutableEffects.emit(
+                        SettingsEffect.Message(
+                            "Diagnostics exported: ${result.bundlePath.fileName}"
+                        )
+                    )
+                }
+
+                is DiagnosticsExportResult.ExportedWithRetentionFailure -> {
+                    feedbackMessage.value = result.message
+                    mutableEffects.emit(
+                        SettingsEffect.Message(
+                            "Diagnostics exported: ${result.bundlePath.fileName}"
+                        )
+                    )
+                }
+
+                is DiagnosticsExportResult.Failed -> {
+                    feedbackMessage.value = result.message
+                    mutableEffects.emit(SettingsEffect.Message(result.message))
+                }
             }
         }
+    }
+
+    fun clearFeedback() {
+        feedbackMessage.value = null
+    }
+
+    fun showFeedback(message: String) {
+        feedbackMessage.value = message
     }
 
     private companion object {

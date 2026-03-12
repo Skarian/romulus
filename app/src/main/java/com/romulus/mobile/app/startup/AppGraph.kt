@@ -1,11 +1,9 @@
 package com.romulus.mobile.app.startup
 
 import android.app.Application
-import android.net.Uri
-import com.romulus.mobile.app.platform.GrantRestoreReport
+import com.romulus.mobile.app.platform.AndroidUriGrantRegistry
 import com.romulus.mobile.app.platform.NotificationDeepLinkHandler
 import com.romulus.mobile.app.platform.NotificationPermissionRequester
-import com.romulus.mobile.app.platform.PersistedUriGrant
 import com.romulus.mobile.app.platform.UriGrantRegistry
 import com.romulus.mobile.app.shell.ShellNavigator
 import com.romulus.mobile.diagnostics.DiagnosticsFacade
@@ -13,7 +11,6 @@ import com.romulus.mobile.downloads.DownloadsFacade
 import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.remotezip.RemoteZipFacade
 import com.romulus.mobile.source.SourceFacade
-import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 
 data class AppGraph(
@@ -44,9 +41,8 @@ data class AppGraph(
                 application = application,
                 realDebridFacade = realDebridFacade
             )
-            val setupStateStore: SetupStateStore = UnwiredSetupStateStore()
-            val uriGrantRegistry: UriGrantRegistry =
-                FailFastUriGrantRegistry(application.packageName)
+            val setupStateStore: SetupStateStore = SharedPreferencesSetupStateStore(application)
+            val uriGrantRegistry = AndroidUriGrantRegistry(application)
             val appReadinessCoordinator = AppReadinessCoordinator(
                 sourceFacade = sourceFacade,
                 downloadsFacade = downloadsFacade,
@@ -81,34 +77,4 @@ data class AppGraph(
             )
         }
     }
-}
-
-internal class UnwiredSetupStateStore : SetupStateStore {
-    override suspend fun read(): SetupCompletionRecord =
-        throw UnsupportedOperationException("SetupStateStore is not wired yet")
-
-    override suspend fun markCompleted(at: Instant): Result<Unit> = Result.failure(
-        UnsupportedOperationException("SetupStateStore is not wired yet")
-    )
-}
-
-internal class FailFastUriGrantRegistry(private val packageName: String) : UriGrantRegistry {
-    override suspend fun captureSourceGrant(uri: Uri): Result<PersistedUriGrant> = Result.failure(
-        UnsupportedOperationException(
-            "UriGrantRegistry is not wired yet for $packageName"
-        )
-    )
-
-    override suspend fun captureOutputGrant(uri: Uri): Result<PersistedUriGrant> = Result.failure(
-        UnsupportedOperationException(
-            "UriGrantRegistry is not wired yet for $packageName"
-        )
-    )
-
-    override suspend fun restorePersistedGrants(): GrantRestoreReport =
-        throw UnsupportedOperationException("UriGrantRegistry is not wired yet for $packageName")
-
-    override suspend fun revoke(uri: Uri): Result<Unit> = Result.failure(
-        UnsupportedOperationException("UriGrantRegistry is not wired yet for $packageName")
-    )
 }

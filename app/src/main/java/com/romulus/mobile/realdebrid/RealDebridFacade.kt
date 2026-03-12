@@ -174,7 +174,7 @@ private data class RealDebridFacadeComponents(
 )
 
 internal class UnwiredRealDebridApi : RealDebridApi {
-    override suspend fun getAvailableHosts(): List<String> =
+    override suspend fun getAvailableHosts(): List<AvailableHostDto> =
         throw UnsupportedOperationException("RealDebridFacade is not wired yet")
 
     override suspend fun addMagnet(magnet: String, host: String): AddedMagnetDto =

@@ -16,6 +16,25 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadsViewModelTest {
     @Test
+    fun updateClearHistoryIncludeFailedRewritesDialogState() {
+        val viewModel = DownloadsViewModel(
+            downloadsFacade = DownloadsFacade(),
+            savedStateHandle = SavedStateHandle()
+        )
+
+        viewModel.openClearHistory()
+        viewModel.updateClearHistoryIncludeFailed(includeFailed = true)
+
+        assertEquals(
+            ClearHistoryDialogState(
+                includeFailed = true,
+                errorMessage = null
+            ),
+            readMutableStateFlowValue<ClearHistoryDialogState?>(viewModel, "clearHistoryDialog")
+        )
+    }
+
+    @Test
     fun clearHistoryFailureKeepsDialogOpenWithError() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try {

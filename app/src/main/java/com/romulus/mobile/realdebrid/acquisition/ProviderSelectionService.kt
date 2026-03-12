@@ -16,7 +16,10 @@ internal class ProviderSelectionService(
     private val api: RealDebridApi
 ) {
     suspend fun start(locator: ProviderLocator): Result<ProviderResumeMarker> = captureResult {
-        val host = budget.run { api.getAvailableHosts() }.firstOrNull()
+        val host = budget
+            .run { api.getAvailableHosts() }
+            .firstOrNull()
+            ?.host
             ?: error("No Real-Debrid hosts are available")
         val addedTorrent = budget.run {
             api.addMagnet(

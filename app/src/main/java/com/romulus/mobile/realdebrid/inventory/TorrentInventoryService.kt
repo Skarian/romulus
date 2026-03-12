@@ -19,7 +19,10 @@ internal class TorrentInventoryService(
     suspend fun enumerate(request: ProviderInventoryRequest): Result<ProviderInventory> =
         captureResult {
             val files = request.sources.flatMap { source ->
-                val host = budget.run { api.getAvailableHosts() }.firstOrNull()
+                val host = budget
+                    .run { api.getAvailableHosts() }
+                    .firstOrNull()
+                    ?.host
                     ?: error("No Real-Debrid hosts are available")
                 val addedTorrent = budget.run {
                     api.addMagnet(

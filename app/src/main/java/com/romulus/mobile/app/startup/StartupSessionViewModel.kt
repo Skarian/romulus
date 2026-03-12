@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.romulus.mobile.app.shell.AppLaunchIntent
+import com.romulus.mobile.app.shell.ShellRoute
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +57,20 @@ class StartupSessionViewModel(private val startupBootstrapper: StartupBootstrapp
                 routeDecision = routeDecision
             )
         }
+    }
+
+    fun completeSetup(initialRoute: ShellRoute) {
+        val currentState = mutableState.value
+        if (
+            currentState.bootstrapping ||
+            currentState.routeDecision != StartupRouteDecision.Setup
+        ) {
+            return
+        }
+
+        mutableState.value = currentState.copy(
+            routeDecision = StartupRouteDecision.Shell(initialRoute = initialRoute)
+        )
     }
 
     companion object {

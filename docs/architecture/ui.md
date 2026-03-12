@@ -596,7 +596,7 @@ class SettingsViewModel(
    - `SetupViewModel` holds local drafts and picked URIs.
    - URI-grant capture stays app-owned and is invoked through callbacks.
    - On successful `SetupSubmissionCoordinator.submit`, `SetupViewModel` emits `SetupEffect.Completed`.
-   - `ShellScaffold` calls the app-owned `onSetupCompleted` callback so setup hands off into the shell without process recreation.
+   - `ShellScaffold` calls the app-owned `onSetupCompleted` callback so the startup session transitions from `Setup` to `Shell` without process recreation.
 
 2. Home invalid-settings recovery:
    - `HomeViewModel` combines `ShellReadiness` and `HomeSourceState`.

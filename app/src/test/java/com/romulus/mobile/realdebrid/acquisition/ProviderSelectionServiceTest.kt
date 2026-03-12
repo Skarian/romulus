@@ -1,6 +1,7 @@
 package com.romulus.mobile.realdebrid.acquisition
 
 import com.romulus.mobile.realdebrid.AddedMagnetDto
+import com.romulus.mobile.realdebrid.AvailableHostDto
 import com.romulus.mobile.realdebrid.FakeRealDebridApi
 import com.romulus.mobile.realdebrid.MutableClock
 import com.romulus.mobile.realdebrid.ProviderLocator
@@ -20,7 +21,7 @@ class ProviderSelectionServiceTest {
     @Test
     fun startCreatesFreshProviderTorrentAndSelectsRequestedFiles() = runTest {
         val api = FakeRealDebridApi().apply {
-            availableHosts = listOf("host-a")
+            availableHosts = listOf(AvailableHostDto(host = "host-a"))
             enqueueAddedMagnet(AddedMagnetDto(id = "download-torrent"))
             enqueueTorrentInfo(
                 "download-torrent",

@@ -72,7 +72,9 @@ internal class RecordingCredentialVault(
 }
 
 internal class FakeRealDebridApi : RealDebridApi {
-    var availableHosts: List<String> = listOf("rd-host")
+    var availableHosts: List<AvailableHostDto> = listOf(
+        AvailableHostDto(host = "rd-host")
+    )
     val addMagnetCalls = mutableListOf<AddMagnetCall>()
     val selectFilesCalls = mutableListOf<SelectFilesCall>()
     val torrentInfoCalls = mutableListOf<String>()
@@ -95,7 +97,7 @@ internal class FakeRealDebridApi : RealDebridApi {
         unrestrictResponses[link] = result
     }
 
-    override suspend fun getAvailableHosts(): List<String> = availableHosts
+    override suspend fun getAvailableHosts(): List<AvailableHostDto> = availableHosts
 
     override suspend fun addMagnet(magnet: String, host: String): AddedMagnetDto {
         addMagnetCalls += AddMagnetCall(magnet = magnet, host = host)

@@ -2,6 +2,7 @@ package com.romulus.mobile.realdebrid.inventory
 
 import com.romulus.mobile.realdebrid.AddedMagnetDto
 import com.romulus.mobile.realdebrid.AddMagnetCall
+import com.romulus.mobile.realdebrid.AvailableHostDto
 import com.romulus.mobile.realdebrid.FakeRealDebridApi
 import com.romulus.mobile.realdebrid.MutableClock
 import com.romulus.mobile.realdebrid.ProviderInventoryRequest
@@ -19,7 +20,10 @@ class TorrentInventoryServiceTest {
     @Test
     fun enumeratesInventoryAcrossSourcesAndPreservesPartLabels() = runTest {
         val api = FakeRealDebridApi().apply {
-            availableHosts = listOf("host-a", "host-b")
+            availableHosts = listOf(
+                AvailableHostDto(host = "host-a"),
+                AvailableHostDto(host = "host-b")
+            )
             enqueueAddedMagnet(AddedMagnetDto(id = "torrent-1"))
             enqueueAddedMagnet(AddedMagnetDto(id = "torrent-2"))
             enqueueTorrentInfo(

@@ -17,7 +17,7 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 internal interface RealDebridApi {
-    suspend fun getAvailableHosts(): List<String>
+    suspend fun getAvailableHosts(): List<AvailableHostDto>
 
     suspend fun addMagnet(magnet: String, host: String): AddedMagnetDto
 
@@ -36,7 +36,7 @@ internal class RetrofitRealDebridApi(
     private val endpoints: AuthenticatedRealDebridEndpoints,
     private val tokenService: TokenService
 ) : RealDebridApi {
-    override suspend fun getAvailableHosts(): List<String> = withAuth { authHeader ->
+    override suspend fun getAvailableHosts(): List<AvailableHostDto> = withAuth { authHeader ->
         endpoints.getAvailableHosts(authHeader)
     }
 
@@ -138,7 +138,9 @@ internal interface AuthValidationEndpoints {
 
 internal interface AuthenticatedRealDebridEndpoints {
     @GET("torrents/availableHosts")
-    suspend fun getAvailableHosts(@Header("Authorization") authHeader: String): List<String>
+    suspend fun getAvailableHosts(
+        @Header("Authorization") authHeader: String
+    ): List<AvailableHostDto>
 
     @FormUrlEncoded
     @POST("torrents/addMagnet")

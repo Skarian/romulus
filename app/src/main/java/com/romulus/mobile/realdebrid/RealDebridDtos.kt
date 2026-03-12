@@ -18,6 +18,13 @@ internal data class AddedMagnetDto(
 )
 
 @Serializable
+internal data class AvailableHostDto(
+    val host: String,
+    @SerialName("max_file_size")
+    val maxFileSize: Long? = null
+)
+
+@Serializable
 internal data class TorrentInfoDto(
     val id: String,
     val hash: String? = null,

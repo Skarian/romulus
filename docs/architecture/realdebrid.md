@@ -491,7 +491,7 @@ class ExactZipResolver(
 
 2. Provider inventory:
    - `TorrentInventoryService` iterates `ProviderSourceRef` values.
-   - For each source it performs host selection, torrent registration, and file enumeration.
+   - For each source it performs host selection from Real-Debrid's `availableHosts` objects, torrent registration, and file enumeration.
    - It aggregates files into one `ProviderInventory` without leaking raw API models.
 
 3. Standard-file resolution:

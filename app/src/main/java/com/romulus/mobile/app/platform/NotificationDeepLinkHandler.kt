@@ -26,6 +26,30 @@ class NotificationDeepLinkHandler {
 }
 
 class NotificationPermissionRequester {
-    fun requestIfNeeded(): Nothing =
-        throw UnsupportedOperationException("NotificationPermissionRequester is not wired yet")
+    private var hostBinding: HostBinding? = null
+    private var didRequest = false
+
+    fun bindHost(hasPermission: () -> Boolean, requestPermission: () -> Unit) {
+        hostBinding = HostBinding(
+            hasPermission = hasPermission,
+            requestPermission = requestPermission
+        )
+    }
+
+    fun requestIfNeeded() {
+        if (didRequest) {
+            return
+        }
+
+        didRequest = true
+        val binding = hostBinding ?: return
+        if (!binding.hasPermission()) {
+            binding.requestPermission()
+        }
+    }
+
+    private data class HostBinding(
+        val hasPermission: () -> Boolean,
+        val requestPermission: () -> Unit
+    )
 }

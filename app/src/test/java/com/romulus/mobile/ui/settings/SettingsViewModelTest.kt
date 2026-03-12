@@ -36,4 +36,16 @@ class SettingsViewModelTest {
             feedback
         )
     }
+
+    @Test
+    fun recursiveUnarchiveValidationFeedbackUsesSourceMessage() {
+        val feedback = SourceValidationIssue.InvalidRecursiveUnarchive(
+            message = "Recursive unarchive requires unarchive to be enabled."
+        ).toSettingsFeedbackMessage()
+
+        assertEquals(
+            "Recursive unarchive requires unarchive to be enabled.",
+            feedback
+        )
+    }
 }
