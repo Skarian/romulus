@@ -1,0 +1,256 @@
+@file:Suppress(
+    "ChainMethodContinuation",
+    "ClassSignature",
+    "RedundantSuspendModifier",
+    "ReturnCount"
+)
+
+package com.romulus.mobile.downloads.output
+
+import com.romulus.mobile.downloads.queue.FinalizationCursor
+import com.romulus.mobile.downloads.queue.QueueTask
+import com.romulus.mobile.downloads.queue.TransferCheckpoint
+import java.io.File
+import java.util.UUID
+
+internal sealed interface ArtifactRecoveryDisposition {
+    data object CannotResume : ArtifactRecoveryDisposition
+
+    data class ResumeTransfer(
+        val reservation: OutputReservation,
+        val safeResumeOffset: Long
+    ) : ArtifactRecoveryDisposition
+
+    data class ResumeFinalization(
+        val reservation: OutputReservation,
+        val cursor: FinalizationCursor
+    ) : ArtifactRecoveryDisposition
+}
+
+internal class OutputReservationService(
+    private val outputFilesystem: OutputFilesystem,
+    private val outputRootResolver: OutputRootResolver,
+    private val artifactRoot: File
+) {
+    suspend fun resolveFreshBinding(): Result<OutputRootBinding> =
+        outputRootResolver.resolveFreshBinding()
+
+    suspend fun listRelativePaths(
+        outputDirectoryUri: String,
+        subfolder: String
+    ): Result<Set<String>> = outputFilesystem.listRelativePaths(
+        outputDirectoryUri = outputDirectoryUri,
+        subfolder = subfolder
+    )
+
+    suspend fun reserve(
+        task: QueueTask,
+        occupiedRelativePathsProvider: suspend (String) -> Set<String> = { emptySet() }
+    ): Result<OutputReservation> {
+        val binding = resolveFreshBinding().getOrElse { throwable ->
+            return Result.failure(throwable)
+        }
+        val existingRelativePaths = listRelativePaths(
+            outputDirectoryUri = binding.outputDirectoryUri,
+            subfolder = task.storageTarget.subfolder
+        ).getOrElse { throwable ->
+            return Result.failure(throwable)
+        } + occupiedRelativePathsProvider(binding.outputDirectoryUri)
+        return Result.success(
+            createReservation(
+                task = task,
+                binding = binding,
+                occupiedRelativePaths = existingRelativePaths
+            )
+        )
+    }
+
+    fun createReservation(
+        task: QueueTask,
+        binding: OutputRootBinding,
+        occupiedRelativePaths: Set<String>
+    ): OutputReservation {
+        val reservationId = ReservationId(UUID.randomUUID().toString())
+        val tempArtifact = artifactRoot.resolve("artifacts/${reservationId.value}.part")
+        val extractionRoot = artifactRoot.resolve("extract/${reservationId.value}")
+        val handling = task.reservedArtifactHandling()
+        tempArtifact.parentFile?.mkdirs()
+        extractionRoot.mkdirs()
+        return OutputReservation(
+            reservationId = reservationId,
+            boundOutputDirectoryUri = binding.outputDirectoryUri,
+            artifact = ReservedArtifact(
+                originalDisplayName = task.originalDisplayName,
+                tempArtifactPath = tempArtifact.absolutePath,
+                extractionRootPath = extractionRoot.absolutePath,
+                handling = handling
+            ),
+            directOutput = if (handling == ReservedArtifactHandling.DIRECT_SAVE) {
+                val preferredDisplayName = task.preferredOutputName()
+                val relativePath = resolveRelativePath(
+                    subfolder = task.storageTarget.subfolder,
+                    preferredFileName = preferredDisplayName,
+                    occupiedRelativePaths = occupiedRelativePaths
+                )
+                ReservedDirectOutput(
+                    finalOutputId = FinalOutputId(UUID.randomUUID().toString()),
+                    relativePath = relativePath,
+                    displayName = relativePath.substringAfterLast('/')
+                )
+            } else {
+                null
+            },
+            extractionPlan = emptyList()
+        )
+    }
+
+    suspend fun expandExtractionPlan(
+        task: QueueTask,
+        reservation: OutputReservation,
+        extractedEntries: List<ExtractionManifestEntry>,
+        occupiedRelativePaths: suspend (String) -> Set<String> = { emptySet() }
+    ): Result<OutputReservation> {
+        val occupiedPaths = outputFilesystem.listRelativePaths(
+            outputDirectoryUri = reservation.boundOutputDirectoryUri,
+            subfolder = task.storageTarget.subfolder
+        ).getOrElse { throwable ->
+            return Result.failure(throwable)
+        }.toMutableSet().apply {
+            addAll(occupiedRelativePaths(reservation.boundOutputDirectoryUri))
+            reservation.directOutput?.let { directOutput -> add(directOutput.relativePath) }
+            addAll(reservation.extractionPlan.map(ReservedExtractionOutput::relativePath))
+        }
+        val existingByArchiveEntryPath = reservation.extractionPlan.associateBy(
+            ReservedExtractionOutput::archiveEntryPath
+        )
+        val reserved = extractedEntries.mapNotNull { entryPath ->
+            existingByArchiveEntryPath[entryPath.archiveEntryPath] ?: run {
+                val preferredFileName = task.preferredExtractedOutputName(
+                    entryPath = entryPath.archiveEntryPath,
+                    renameEligible = entryPath.renameEligible
+                )
+                val relativePath = resolveRelativePath(
+                    subfolder = task.storageTarget.subfolder,
+                    preferredFileName = preferredFileName,
+                    occupiedRelativePaths = occupiedPaths
+                )
+                occupiedPaths += relativePath
+                ReservedExtractionOutput(
+                    finalOutputId = FinalOutputId(UUID.randomUUID().toString()),
+                    archiveEntryPath = entryPath.archiveEntryPath,
+                    relativePath = relativePath,
+                    displayName = relativePath.substringAfterLast('/')
+                )
+            }
+        }
+        return Result.success(
+            reservation.copy(
+                extractionPlan = reservation.extractionPlan + reserved
+            )
+        )
+    }
+
+    suspend fun revalidateCurrentOutputDirectory() =
+        outputRootResolver.revalidateCurrentOutputDirectory()
+
+    fun inspectRecoveryDisposition(
+        reservation: OutputReservation?,
+        checkpoint: TransferCheckpoint?,
+        persistedCursor: FinalizationCursor?
+    ): ArtifactRecoveryDisposition {
+        if (reservation == null || checkpoint == null) {
+            return ArtifactRecoveryDisposition.CannotResume
+        }
+        if (persistedCursor != null) {
+            return ArtifactRecoveryDisposition.ResumeFinalization(
+                reservation = reservation,
+                cursor = persistedCursor
+            )
+        }
+        val tempArtifact = File(reservation.tempArtifactPath)
+        if (!tempArtifact.exists()) {
+            return ArtifactRecoveryDisposition.CannotResume
+        }
+        val artifactLength = tempArtifact.length()
+        if (artifactLength < checkpoint.resumeByteOffset) {
+            return ArtifactRecoveryDisposition.CannotResume
+        }
+        if (checkpoint.totalBytes != null && artifactLength == checkpoint.totalBytes) {
+            return ArtifactRecoveryDisposition.ResumeFinalization(
+                reservation = reservation,
+                cursor = createInitialFinalizationCursor(reservation)
+            )
+        }
+        return ArtifactRecoveryDisposition.ResumeTransfer(
+            reservation = reservation,
+            safeResumeOffset = artifactLength
+        )
+    }
+
+    private fun resolveRelativePath(
+        subfolder: String,
+        preferredFileName: String,
+        occupiedRelativePaths: Set<String>
+    ): String {
+        val relativeDirectory = subfolder.trim().trim('/')
+        val baseRelativePath = listOf(relativeDirectory, preferredFileName)
+            .filter(String::isNotBlank)
+            .joinToString("/")
+        if (baseRelativePath !in occupiedRelativePaths) {
+            return baseRelativePath
+        }
+
+        val extension = preferredFileName.substringAfterLast('.', "")
+        val stem = if (extension.isBlank()) {
+            preferredFileName
+        } else {
+            preferredFileName.removeSuffix(".$extension")
+        }
+        var collisionIndex = 1
+        while (true) {
+            val candidateFileName = if (extension.isBlank()) {
+                "$stem ($collisionIndex)"
+            } else {
+                "$stem ($collisionIndex).$extension"
+            }
+            val candidateRelativePath = listOf(relativeDirectory, candidateFileName)
+                .filter(String::isNotBlank)
+                .joinToString("/")
+            if (candidateRelativePath !in occupiedRelativePaths) {
+                return candidateRelativePath
+            }
+            collisionIndex += 1
+        }
+    }
+
+    private fun QueueTask.preferredOutputName(): String {
+        val renameRule = namingIntent.renameRule
+        if (namingIntent.applyRename && renameRule != null) {
+            return runCatching {
+                Regex(renameRule.pattern).replace(originalDisplayName, renameRule.replacement)
+            }.getOrDefault(originalDisplayName)
+        }
+        return originalDisplayName
+    }
+
+    private fun QueueTask.preferredExtractedOutputName(
+        entryPath: String,
+        renameEligible: Boolean
+    ): String {
+        val originalName = entryPath.substringAfterLast('/').ifBlank { "entry" }
+        val renameRule = namingIntent.renameRule
+        if (renameEligible && namingIntent.applyRename && renameRule != null) {
+            return runCatching {
+                Regex(renameRule.pattern).replace(originalName, renameRule.replacement)
+            }.getOrDefault(originalName)
+        }
+        return originalName
+    }
+
+    private fun QueueTask.reservedArtifactHandling(): ReservedArtifactHandling =
+        if (unarchiveIntent && outputFilesystem.isSupportedArchive(originalDisplayName)) {
+            ReservedArtifactHandling.LOCAL_UNARCHIVE
+        } else {
+            ReservedArtifactHandling.DIRECT_SAVE
+        }
+}

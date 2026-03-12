@@ -55,8 +55,8 @@ class AppReadinessCoordinator(
     )
 
     suspend fun readStartupReadiness(): ShellReadiness = composeReadiness(
-        sourceReadiness = sourceFacade.readStartupReadiness(),
-        downloadsReadiness = downloadsFacade.readSettingsReadiness(),
+        sourceReadiness = sourceFacade.revalidateReadiness(),
+        downloadsReadiness = downloadsFacade.revalidateSettingsReadiness(),
         tokenReadiness = realDebridFacade.readTokenReadiness()
     )
 

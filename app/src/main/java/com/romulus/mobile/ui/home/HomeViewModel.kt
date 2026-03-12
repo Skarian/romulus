@@ -69,6 +69,9 @@ class HomeViewModel(
 
     init {
         savedStateHandle.keys()
+        viewModelScope.launch {
+            sourceFacade.revalidateReadiness()
+        }
     }
 
     val state: StateFlow<HomeUiState> = combine(

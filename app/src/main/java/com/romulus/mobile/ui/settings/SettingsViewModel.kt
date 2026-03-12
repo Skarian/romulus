@@ -63,6 +63,10 @@ class SettingsViewModel(
 
     init {
         savedStateHandle.keys()
+        viewModelScope.launch {
+            sourceFacade.revalidateReadiness()
+            downloadsFacade.revalidateSettingsReadiness()
+        }
     }
 
     private val ownerState = combine(

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.romulus.mobile.app.startup.SetupDraft
 import com.romulus.mobile.app.startup.SetupSubmissionCoordinator
 import com.romulus.mobile.app.startup.SetupSubmissionResult
+import com.romulus.mobile.downloads.config.DownloadLimits
 import com.romulus.mobile.downloads.config.DownloadSettingsDraft
 import com.romulus.mobile.source.ingest.AcceptSourceCommand
 import com.romulus.mobile.source.ingest.SourceMode
@@ -161,6 +162,6 @@ class SetupViewModel(
     }
 
     private companion object {
-        const val DEFAULT_MAX_CONCURRENCY = 1
+        const val DEFAULT_MAX_CONCURRENCY = DownloadLimits.DEFAULT_CONCURRENCY
     }
 }

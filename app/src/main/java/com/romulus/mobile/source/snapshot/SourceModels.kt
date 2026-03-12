@@ -1,17 +1,23 @@
 package com.romulus.mobile.source.snapshot
 
+import com.romulus.mobile.source.InstantAsEpochMilliSerializer
 import com.romulus.mobile.source.ingest.RenameRule
 import com.romulus.mobile.source.ingest.SourceMode
 import java.time.Instant
+import kotlinx.serialization.Serializable
 
+@Serializable
 @JvmInline
 value class SnapshotId(val value: String)
 
+@Serializable
 @JvmInline
 value class SourceEntryId(val value: String)
 
+@Serializable
 data class SourceTorrentRef(val magnetUri: String, val partLabel: String?)
 
+@Serializable
 data class SourceSnapshotEntry(
     val entryId: SourceEntryId,
     val displayName: String,
@@ -26,12 +32,15 @@ data class SourceSnapshotEntry(
     val recursiveUnarchiveDefault: Boolean
 )
 
+@Serializable
 data class SourceSnapshot(
     val snapshotId: SnapshotId,
+    @Serializable(with = InstantAsEpochMilliSerializer::class)
     val acceptedAt: Instant,
     val entries: List<SourceSnapshotEntry>
 )
 
+@Serializable
 enum class SourceRefreshOutcome {
     ACCEPTED,
     RETAINED_PRIOR,

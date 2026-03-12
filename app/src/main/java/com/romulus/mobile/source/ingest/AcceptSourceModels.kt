@@ -1,12 +1,15 @@
 package com.romulus.mobile.source.ingest
 
 import com.romulus.mobile.source.snapshot.SnapshotId
+import kotlinx.serialization.Serializable
 
+@Serializable
 enum class SourceMode {
     URL,
     FILE
 }
 
+@Serializable
 data class RenameRule(val pattern: String, val replacement: String)
 
 data class AcceptSourceCommand(

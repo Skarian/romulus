@@ -6,7 +6,9 @@ import com.romulus.mobile.remotezip.ArchiveEntryIdentity
 import com.romulus.mobile.source.ingest.RenameRule
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import kotlinx.serialization.Serializable
 
+@Serializable
 @JvmInline
 value class SelectableItemId(val value: String)
 

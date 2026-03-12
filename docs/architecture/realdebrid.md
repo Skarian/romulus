@@ -41,7 +41,7 @@ This package stays moderately concrete because spike evidence locked the executi
 - `ProviderInventory`
   - Aggregated provider file list for one or more source torrents.
 - `ProviderLocator`
-  - Stable locator data needed to re-resolve the same selected provider file later.
+  - Stable queue-owned selection contract needed to re-resolve the same selected provider file later without path-only fallback.
 - `ProviderResumeMarker`
   - Opaque marker needed to resume provider acquisition polling without resetting the `Preparing` deadline.
 - `ResolvedDownloadUnit`
@@ -389,6 +389,7 @@ data class ArchiveContainerLocator(
 - Internal area: `realdebrid/inventory`
 - Purpose: enumerate provider files for one or more source torrents.
 - Responsibility: follow the host-selection and torrent-registration flow proven by the spike.
+- Inventory-built `ProviderLocator.providerFileIds` and `selectedProviderFileId` are queue-owned opaque selection ids derived deterministically from the provider file list, not raw Real-Debrid file ids. Fresh acquisition must re-derive those opaque ids from the new torrent before selecting provider-side file ids.
 - Depends on: HTTP client boundary, `RequestBudget`
 - Must not depend on: queue stores
 - Visibility: `internal`
@@ -407,6 +408,7 @@ class TorrentInventoryService(
 - Internal area: `realdebrid/acquisition`
 - Purpose: select the correct provider file set for one queue row.
 - Responsibility: start or verify provider-side selection for the exact locator passed in from source or queue state.
+- Selection must fail explicitly when the queue-owned locator cannot be re-derived from the fresh torrent; it must not fall back to matching by path alone.
 - Depends on: `RequestBudget`, `RealDebridApi`
 - Must not depend on: queue stores
 - Visibility: `internal`

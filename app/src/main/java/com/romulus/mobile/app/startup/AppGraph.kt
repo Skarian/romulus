@@ -34,10 +34,16 @@ data class AppGraph(
         @Suppress("InjectDispatcher")
         fun create(application: Application): AppGraph {
             val diagnosticsFacade = DiagnosticsFacade()
-            val sourceFacade = SourceFacade()
-            val downloadsFacade = DownloadsFacade()
-            val realDebridFacade = RealDebridFacade()
+            val realDebridFacade = RealDebridFacade.create(application)
             val remoteZipFacade = RemoteZipFacade()
+            val sourceFacade = SourceFacade.create(
+                application = application,
+                realDebridFacade = realDebridFacade
+            )
+            val downloadsFacade = DownloadsFacade.create(
+                application = application,
+                realDebridFacade = realDebridFacade
+            )
             val setupStateStore: SetupStateStore = UnwiredSetupStateStore()
             val uriGrantRegistry: UriGrantRegistry =
                 FailFastUriGrantRegistry(application.packageName)

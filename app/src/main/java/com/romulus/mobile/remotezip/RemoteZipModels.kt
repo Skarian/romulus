@@ -1,7 +1,9 @@
 package com.romulus.mobile.remotezip
 
 import java.nio.file.Path
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class ArchiveEntryIdentity(
     val localHeaderOffset: Long,
     val compressedSize: Long,

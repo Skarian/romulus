@@ -41,7 +41,7 @@ This package stays intentionally concrete because it owns the most contract-bear
 - `QueueTask`
   - Durable row identity, enqueue-time execution contract, original file size when known, and output-subfolder context.
 - `QueueRowRecord`
-  - Durable row envelope with canonical state, visibility, durable `updatedAt`, durable attempt count, claim-lease metadata, persisted pending live action, and queue-owned persisted reservation/output data.
+  - Durable row envelope with canonical state, visibility, durable `updatedAt`, durable attempt count, claim-lease metadata, persisted pending live action, queue-owned persisted reservation/output data, and retained cleanup scopes from earlier manual retries that `Restart` must still delete.
 - `QueueTaskState`
   - Canonical durable state for one row; completed output records live on the row envelope, not inside the terminal state payload.
 - `QueueActionRequest`
@@ -413,6 +413,7 @@ enum class QueueVisibility {
 
 enum class PendingQueueAction {
     PAUSE,
+    RESUME,
     CANCEL
 }
 
@@ -511,7 +512,11 @@ interface DownloadLedgerStore {
     suspend fun persistTransferCheckpoint(taskId: TaskId, checkpoint: TransferCheckpoint): Result<Unit>
     suspend fun persistReservation(taskId: TaskId, reservation: OutputReservation): Result<Unit>
     suspend fun persistFinalOutputs(taskId: TaskId, outputs: List<FinalOutputRecord>): Result<Unit>
+    suspend fun completeTask(taskId: TaskId, outputs: List<FinalOutputRecord>): Result<Unit>
     suspend fun readNextRetryAt(): Instant?
+    suspend fun requestDispatch(): Result<Long>
+    suspend fun acknowledgeDispatchStart(): Result<Long>
+    suspend fun hasPendingDispatch(): Boolean
     suspend fun readRow(taskId: TaskId): QueueRowRecord?
     suspend fun readRows(includeHidden: Boolean = true): List<QueueRowRecord>
     fun observeRows(includeHidden: Boolean = true): Flow<List<QueueRowRecord>>
@@ -531,6 +536,7 @@ interface DownloadLedgerStore {
 ```kotlin
 sealed interface EnqueueResult {
     data class Enqueued(val taskIds: List<TaskId>) : EnqueueResult
+    data class EnqueuedPendingDispatch(val taskIds: List<TaskId>, val message: String) : EnqueueResult
     data class Rejected(val message: String) : EnqueueResult
     data class Failed(val message: String) : EnqueueResult
 }
@@ -615,10 +621,19 @@ class QueueService(
 
     suspend fun recordPreparing(taskId: TaskId, metadata: PreparingMetadata): Result<Unit>
     suspend fun recordRunning(taskId: TaskId, checkpoint: TransferCheckpoint): Result<Unit>
+    suspend fun enterFinalization(
+        taskId: TaskId,
+        checkpoint: TransferCheckpoint,
+        cursor: FinalizationCursor
+    ): Result<Unit>
     suspend fun acknowledgePause(taskId: TaskId, checkpoint: TransferCheckpoint): Result<Unit>
     suspend fun acknowledgeCancel(taskId: TaskId, checkpoint: TransferCheckpoint?): Result<Unit>
     suspend fun scheduleRetry(taskId: TaskId, retryAt: Instant, attemptIndex: Int): Result<Unit>
-    suspend fun complete(taskId: TaskId, outputs: List<FinalOutputRecord>): Result<Unit>
+    suspend fun complete(
+        taskId: TaskId,
+        reservation: OutputReservation,
+        outputs: List<FinalOutputRecord>
+    ): Result<Unit>
     suspend fun fail(taskId: TaskId, reason: FailureReason): Result<Unit>
 
     suspend fun clearHistory(includeFailed: Boolean): Result<Unit> {
@@ -642,9 +657,14 @@ sealed interface RecoveryDecision {
     data class HonorPendingPause(val checkpoint: TransferCheckpoint) : RecoveryDecision
     data class HonorPendingCancel(val checkpoint: TransferCheckpoint?) : RecoveryDecision
     data class ResumePreparing(val metadata: PreparingMetadata) : RecoveryDecision
-    data class ResumeRunning(
+data class ResumeRunning(
         val checkpoint: TransferCheckpoint,
         val reservation: OutputReservation
+    ) : RecoveryDecision
+    data class ResumeFinalization(
+        val checkpoint: TransferCheckpoint,
+        val reservation: OutputReservation,
+        val cursor: FinalizationCursor
     ) : RecoveryDecision
     data class Requeue(val state: QueueTaskState) : RecoveryDecision
 }
@@ -659,7 +679,8 @@ class QueueRecoveryPolicy(
 ### `WorkScheduler.kt`
 - Internal area: `downloads/work`
 - Purpose: own runtime claim limits and worker wake-up scheduling.
-- Responsibility: read max concurrency from persisted download settings, translate it into claim limits, own the queue-global auth gate, wake workers on queue mutations or app-launch recovery, and schedule the next retry-at wake.
+- Responsibility: read max concurrency from persisted download settings, translate it into claim limits, own the queue-global auth gate, wake workers on queue mutations or app-launch recovery, and schedule the next deferred wake for retry deadlines or stale-claim recovery.
+- Responsibility: read max concurrency from persisted download settings, translate it into claim limits, own the queue-global auth gate, treat runnable-work dispatch as durable queue-owned generation debt until a worker acknowledges it, wake workers on queue mutations or app-launch recovery, and schedule the next deferred wake for retry deadlines or stale-claim recovery.
 - Depends on: `DownloadSettingsService`, `DownloadLedgerStore`, `RealDebridFacade`, worker-launch boundary, `Clock`
 - Must not depend on: provider clients or UI classes
 - Visibility: `internal`
@@ -695,6 +716,7 @@ class WorkScheduler(
 ) {
     fun observeGate(): StateFlow<QueueWorkGateState>
     suspend fun readGate(): QueueWorkGateState
+    suspend fun synchronizeAuthRecovery(): Result<Unit>
     suspend fun readClaimLimit(): Int
     suspend fun requestWake(reason: WorkWakeReason): Result<Unit>
     suspend fun scheduleNextRetryWake(): Result<Unit>
@@ -734,10 +756,16 @@ interface ControlHandle {
 
 ```kotlin
 sealed interface AttemptOutcome {
-    data class Completed(val outputs: List<FinalOutputRecord>) : AttemptOutcome
+    data class Completed(
+        val reservation: OutputReservation,
+        val outputs: List<FinalOutputRecord>
+    ) : AttemptOutcome
     data class Paused(val checkpoint: TransferCheckpoint) : AttemptOutcome
     data class Cancelled(val checkpoint: TransferCheckpoint?) : AttemptOutcome
-    data class Failed(val reason: FailureReason) : AttemptOutcome
+    data class Failed(
+        val reason: FailureReason,
+        val retryable: Boolean = true
+    ) : AttemptOutcome
 }
 
 class StandardAttemptRunner(
@@ -840,17 +868,34 @@ data class ReservedExtractionOutput(
 data class OutputReservation(
     val reservationId: ReservationId,
     val boundOutputDirectoryUri: String,
-    val tempArtifact: Path,
-    val extractionRoot: Path,
+    val artifact: ReservedArtifact,
     val directOutput: ReservedDirectOutput?,
     val extractionPlan: List<ReservedExtractionOutput>
 )
 
-data class ResumePreconditions(
-    val reservation: OutputReservation?,
-    val tempArtifactExists: Boolean,
-    val canResume: Boolean
+data class ReservedArtifact(
+    val originalDisplayName: String,
+    val tempArtifact: Path,
+    val extractionRoot: Path,
+    val handling: ReservedArtifactHandling
 )
+
+enum class ReservedArtifactHandling {
+    DIRECT_SAVE,
+    LOCAL_UNARCHIVE
+}
+
+sealed interface ArtifactRecoveryDisposition {
+    data object CannotResume : ArtifactRecoveryDisposition
+    data class ResumeTransfer(
+        val reservation: OutputReservation,
+        val safeResumeOffset: Long
+    ) : ArtifactRecoveryDisposition
+    data class ResumeFinalization(
+        val reservation: OutputReservation,
+        val cursor: FinalizationCursor
+    ) : ArtifactRecoveryDisposition
+}
 
 class OutputReservationService(
     private val outputFilesystem: OutputFilesystem,
@@ -861,22 +906,25 @@ class OutputReservationService(
     suspend fun expandExtractionPlan(
         task: QueueTask,
         reservation: OutputReservation,
-        extractedEntries: List<String>
+        extractedEntries: List<ExtractionManifestEntry>
     ): Result<OutputReservation>
-    suspend fun inspectResumePreconditions(
+    suspend fun inspectRecoveryDisposition(
         reservation: OutputReservation?,
-        checkpoint: TransferCheckpoint?
-    ): ResumePreconditions
+        checkpoint: TransferCheckpoint?,
+        persistedCursor: FinalizationCursor?
+    ): ArtifactRecoveryDisposition
 }
 ```
 
-- `reserve(task)` consumes `task.namingIntent` for direct-save work, applies rename before collision suffixing, and persists the chosen final-output identity before transfer begins.
-- `expandExtractionPlan(...)` applies rename only while reserving extracted final non-archive outputs; the consumed archive filename is never renamed before extraction.
+- `reserve(task)` persists the selected artifact's handling mode up front, creates a direct-save reservation only when the row will actually direct-save, and applies rename before collision suffixing when reserving that final output identity.
+- `expandExtractionPlan(...)` appends only newly discovered extracted-output reservations pass by pass, reuses existing `archiveEntryPath` reservations across retries or recovery, applies rename only while reserving final non-archive outputs, and never renames an archive filename before extraction or recursive handoff.
+- `inspectRecoveryDisposition(...)` classifies local artifact state for queue recovery, including the proven handoff case where a complete reserved artifact can enter local finalization even if the initial cursor write did not land before interruption.
 
 ### `OutputFinalizer.kt`
 - Internal area: `downloads/output`
 - Purpose: convert a reserved artifact into final outputs.
 - Responsibility: enforce direct-save versus unarchive ordering, use the names already reserved by `OutputReservationService`, apply rename only to final non-archive outputs, and delete consumed archives only after successful extraction.
+- Finalization mode must come from the persisted reservation artifact handling, not from a temporary filename extension.
 - Depends on: `OutputReservationService`, `ArchiveExtractionController`, `OutputFilesystem`
 - Must not depend on: queue-state mutation
 - Visibility: `internal`
@@ -900,12 +948,13 @@ class OutputFinalizer(
     private val extractionController: ArchiveExtractionController,
     private val outputFilesystem: OutputFilesystem
 ) {
+    fun createInitialCursor(reservation: OutputReservation, artifact: Path): FinalizationCursor
     suspend fun finalize(
         task: QueueTask,
         reservation: OutputReservation,
         artifact: Path
     ): Result<OutputFinalizationResult> {
-        if (!task.unarchiveIntent || !outputFilesystem.isSupportedArchive(artifact)) {
+        if (reservation.artifact.handling == ReservedArtifactHandling.DIRECT_SAVE) {
             // Contract: direct-save path is already reserved before transfer begins.
             val outputs = outputFilesystem.promoteDirectArtifact(
                 artifact = artifact,
@@ -914,30 +963,12 @@ class OutputFinalizer(
             return Result.success(OutputFinalizationResult(reservation = reservation, outputs = outputs))
         }
 
-        val manifest = extractionController.inspectManifest(artifact)
-        val expandedReservation = reservationService.expandExtractionPlan(
-            task = task,
-            reservation = reservation,
-            extractedEntries = manifest.finalEntryPaths
-        ).getOrElse { return Result.failure(it) }
-
-        val outputs = extractionController.extract(
-            archiveFile = artifact,
-            reservedOutputs = expandedReservation.extractionPlan,
-            recursive = task.recursiveUnarchiveIntent
-        ).getOrElse { return Result.failure(it) }
-
         // Contract:
-        // - rename applies to final non-archive outputs only
-        // - archive file is deleted only after successful extraction
+        // - recursive extraction expands reservations pass by pass before each pass writes final files
+        // - rename applies only to final non-archive outputs
+        // - archive files are deleted only after their own extraction pass succeeds
         // - successful earlier extracted outputs remain if a later extraction step fails
-        outputFilesystem.deleteConsumedArchive(artifact)
-        return Result.success(
-            OutputFinalizationResult(
-                reservation = expandedReservation,
-                outputs = outputs
-            )
-        )
+        return extractPassByPass(task = task, initialReservation = reservation, artifact = artifact)
     }
 }
 ```
@@ -953,19 +984,25 @@ class OutputFinalizer(
 
 ```kotlin
 data class ArchiveManifest(
-    val finalEntryPaths: List<String>
+    val finalEntryPaths: List<ExtractionManifestEntry>
 )
 
 class ArchiveExtractionController(
     private val archiveRuntime: ArchiveRuntime,
     private val outputFilesystem: OutputFilesystem
 ) {
-    suspend fun inspectManifest(archiveFile: Path): ArchiveManifest
+    suspend fun inspectManifest(
+        archiveFile: Path,
+        recursive: Boolean,
+        lineage: String
+    ): ArchiveManifest
     suspend fun extract(
         archiveFile: Path,
+        extractionRoot: Path,
         reservedOutputs: List<ReservedExtractionOutput>,
-        recursive: Boolean
-    ): Result<List<FinalOutputRecord>>
+        recursive: Boolean,
+        lineage: String
+    ): Result<ArchivePassExecution>
 }
 ```
 
@@ -973,6 +1010,7 @@ class ArchiveExtractionController(
 - Internal area: `downloads/output`
 - Purpose: own restart cleanup.
 - Responsibility: delete the queue-provided prior output set, reserved temp artifact, extraction root, and any reserved-but-not-finalized outputs for one row or reject restart if cleanup cannot complete safely.
+- Cleanup must only delete outputs that the reservation actually owns; extract-only rows do not reserve or delete a direct-save destination.
 - Depends on: `OutputFilesystem`
 - Must not depend on: queue-state mutation
 - Visibility: `internal`
@@ -1007,8 +1045,7 @@ class DownloadWorkerEntryPoint(
     private val workScheduler: WorkScheduler,
     private val executionControlRegistry: ExecutionControlRegistry,
     private val standardAttemptRunner: StandardAttemptRunner,
-    private val archiveEntryAttemptRunner: ArchiveEntryAttemptRunner,
-    private val notificationPresenter: QueueNotificationPresenter
+    private val archiveEntryAttemptRunner: ArchiveEntryAttemptRunner
 ) {
     suspend fun runOnce()
     suspend fun runUntilDrained()
@@ -1116,7 +1153,7 @@ class QueueSummaryProjector(
 class QueueNotificationPresenter(
     private val notificationApi: NotificationApi
 ) {
-    suspend fun present(projection: DownloadsProjection) {
+    fun present(projection: DownloadsProjection) {
         // Contract:
         // - while any row is Running, use byte-first progress text
         // - while active work exists but none is Running, use short status-only text
@@ -1128,6 +1165,7 @@ class QueueNotificationPresenter(
 ```
 
 - `NotificationApi` owns Android notification posting mechanics, including creating or ensuring required notification channels before any post or update.
+- One acceptable runtime wiring is a projection observer started by `DownloadsFacade.create(...)` that forwards `QueueSummaryProjector.observeProjection()` snapshots into `QueueNotificationPresenter.present(...)`.
 
 ## Key Flows
 
@@ -1149,7 +1187,7 @@ class QueueNotificationPresenter(
    - Before bytes move, `OutputReservationService.reserve` binds the write to the current saved output directory and reserves deterministic output identity unless a resumable reservation already exists.
    - For direct-save work, that reservation consumes `NamingIntent`, applies rename before collision suffixing, and fixes the final output name before transfer starts.
    - During transfer, checkpoints persist at least every 3 seconds and on pause, cancel, failure, or completion.
-   - `OutputFinalizer` expands and returns the persisted reservation state before extraction writes final files, then commits the final outputs.
+   - `OutputFinalizer` expands and persists the extraction reservation pass by pass before each extraction pass writes final files, then commits final outputs incrementally as files land.
    - `QueueService.complete` stores `Completed` plus the canonical `FinalOutputRecord` set on the row envelope.
 
 3. Archive-selection attempt execution:
@@ -1163,6 +1201,7 @@ class QueueNotificationPresenter(
    - `QueueService.performAction(Pause)` is valid only for `Running` rows and persists a `QueueActionRequest` before signaling the live control registry.
    - `QueueService.performAction(Cancel)` immediately transitions non-live states such as `Queued`, `Retry Scheduled`, or `Paused` to `Cancelled`.
    - For live `Preparing` or `Running` work, cancel persists a `QueueActionRequest` before signaling the live control registry.
+   - If cancel arrives after pause was already requested but before the worker acknowledges stop, the durable cancel request wins and the row becomes `Cancelled` after the final checkpoint instead of getting stuck in `Paused`.
    - The attempt loop observes the signal, stops network or file movement, writes a final checkpoint, and only then reports `Paused` or `Cancelled`.
    - Queue state therefore never claims that work stopped before bytes actually stopped.
 
@@ -1174,21 +1213,26 @@ class QueueNotificationPresenter(
    - If the row was in `Resolving`, stale-claim recovery requeues it to a fresh claim cycle unless a pending cancel overrides that path.
    - If the row was in `Preparing`, it preserves the original `enteredAt` and `timeoutAt` and resumes provider polling from the saved resume marker.
    - If the row was in `Running` and the temp artifact plus reservation are still valid, it resumes from the saved transfer checkpoint.
+   - When transfer finished and local promotion or extraction was about to start, `downloads/attempts` uses one queue transition to enter finalization with the completed transfer checkpoint plus the initial finalization cursor.
+   - If interruption happens after the reserved artifact is complete but before that transition lands, `downloads/output` can still prove completion from the reserved artifact and resume local finalization instead of reopening the network stream from EOF.
    - If recovery cannot resume safely, the row requeues without deleting partial data unless the user explicitly restarts it.
 
 6. Restart:
-   - `QueueService.performAction(Restart)` first passes the queue-owned persisted reservation plus final-output records into `OutputCleanupService.cleanupForRestart(...)`.
+   - `QueueService.performAction(Restart)` first passes retained cleanup scopes from earlier manual retries plus the current queue-owned persisted reservation and final-output records into `OutputCleanupService.cleanupForRestart(...)`.
    - If cleanup fails, restart does not proceed.
    - If cleanup succeeds, the row resets to a fresh retry cycle and fresh `Preparing` window when needed again.
 
 7. Runtime wake scheduling:
    - `WorkScheduler` reads `DownloadSettingsState.maxConcurrency` at runtime and converts it into the next worker claim limit.
-   - `QueueService` requests worker wake on enqueue, resume, manual retry, and restart.
+   - `QueueService` advances queue-owned dispatch generation under the ledger lock on enqueue, resume, manual retry, and restart, then asks `WorkScheduler` for the best-effort worker nudge.
+   - `DownloadWorkerEntryPoint` acknowledges the current dispatch generation when it actually begins draining; a requested wake is not considered satisfied merely because the launcher accepted a request.
    - `app/` requests worker wake on completed-setup app launch through `WorkWakeReason.APP_LAUNCH_RECOVERY`.
-   - `WorkScheduler` watches token readiness and requests `WorkWakeReason.AUTH_RECOVERED` automatically when a previously broken token becomes usable again.
-   - `QueueService.scheduleRetry(...)` persists `retryAt` and asks `WorkScheduler` to schedule the earliest retry-at wake.
-   - While auth is broken, `downloads/work` blocks new provider-dependent claims; already-running local byte transfers may finish, but no new forward progress starts until the gate reopens.
-   - `DownloadWorkerEntryPoint` asks `WorkScheduler` to reschedule the next retry-at wake when deferred work remains after a run.
+   - `WorkScheduler` watches token readiness and requests `WorkWakeReason.AUTH_RECOVERED` automatically when a previously broken token becomes usable again, while the worker drain loop also reconciles auth recovery synchronously before exit so the durable dispatch generation cannot be missed at the empty-queue boundary.
+   - `QueueService.scheduleRetry(...)` persists `retryAt` and asks `WorkScheduler` to schedule the earliest deferred wake.
+   - If a best-effort immediate wake fails after durable queue intake, `EnqueueResult` reports partial success through `EnqueuedPendingDispatch(...)` rather than pretending the queue insert failed.
+   - If app-launch recovery or a user action runs before a stale claim lease expires, `WorkScheduler` schedules a follow-up wake for the earliest relevant lease-expiry boundary instead of depending on a later incidental wake.
+  - While auth is broken, `downloads/work` blocks new provider-dependent claims; already-running local byte transfers may finish, stale pause/cancel recovery still honors durable control requests, and no new forward progress starts until the gate reopens.
+   - `DownloadWorkerEntryPoint` asks `WorkScheduler` to reschedule the next deferred wake when deferred work remains after a run.
 
 8. Clear history:
    - `QueueService.clearHistory(includeFailed)` targets only terminal visible rows.
@@ -1201,17 +1245,19 @@ class QueueNotificationPresenter(
 - Queue rows always reflect real work, not requested work.
 - Attempt count is durable row metadata and survives process death, retry scheduling, and projection.
 - Pending pause or cancel actions are durable and must be honored by recovery if a process dies before a live worker acknowledges them.
-- Claim leases are durable enough to make stale-claim recovery explicit; recovery never depends on an implied in-memory worker list.
+- Claim leases are durable enough to make stale-claim recovery explicit; active work renews its lease through durable live-state mutations, and recovery never depends on an implied in-memory worker list.
 - `Resolving` covers claim-start rehydration, auth-gate check, fresh link or outer-container resolution, and deciding whether provider acquisition is required.
 - `Preparing` timing and timeout deadline survive interruption and recovery.
 - Auto-retry uses the fixed retry windows defined by behavior and does not create new rows.
-- Manual `Retry` resets retry history for the same row.
+- Manual `Retry` resets retry history for the same row, clears the active execution reservation, and retains any prior cleanup scope so `Restart` can still delete outputs already created by that row.
 - Manual `Restart` requires cleanup of the prior output set first.
 - Queue rows keep stable output subfolder and naming context, but they do not pin the saved output-directory URI forever; fresh execution or retry reads the current saved directory, while recovery with a valid reservation stays pinned to that reservation's bound root.
 - `downloads/work` owns the queue-global auth gate. When token readiness is broken, new provider-dependent claims stop; when token readiness becomes usable again, queue wake resumes automatically.
 - Output reservation must choose direct-save names before transfer begins, using `NamingIntent` with rename applied before collision suffixing.
+- Output reservation must also persist whether the selected artifact is a direct-save file or a supported local-unarchive file before transfer begins.
 - Output cleanup and resume inspection operate on queue-owned persisted reservation/output data passed into `downloads/output`; `downloads/output` does not reach into the queue ledger by `taskId`.
 - Extraction reservations must be expanded before extraction writes final files, and rename applies there only to final non-archive outputs.
+- Finalization writes that were already persisted as row-owned outputs must remain on disk if the final completed-state ledger commit fails; recovery then retries completion from durable local state instead of deleting promoted outputs and drifting the ledger.
 - Archive-entry resume uses `remotezip/` selected-entry copy with a saved byte offset; archive selection is not carved out of resume-in-place.
 - Hidden history is visibility-only and persists across app restarts.
 - Notification failure must not break queue execution.

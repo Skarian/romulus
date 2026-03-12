@@ -60,6 +60,17 @@ kotlin {
     }
 }
 
+val generatedSourceSchemaAssetsDir = layout.buildDirectory.dir("generated/source-schema-assets")
+val syncSourceSchema by tasks.registering(Copy::class) {
+    from(rootProject.file("docs/schema.json"))
+    into(generatedSourceSchemaAssetsDir)
+    rename { "source-schema.json" }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(syncSourceSchema)
+}
+
 kapt {
     correctErrorTypes = true
 }
@@ -78,6 +89,8 @@ detekt {
         baseline = detektBaselineFile
     }
 }
+
+android.sourceSets.getByName("main").assets.srcDir(generatedSourceSchemaAssetsDir)
 
 tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
     reports {
@@ -110,10 +123,12 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("com.networknt:json-schema-validator:2.0.1")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+    implementation("com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03")
     val composeBom = platform("androidx.compose:compose-bom:2026.01.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
