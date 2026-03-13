@@ -18,9 +18,11 @@ import com.romulus.mobile.downloads.queue.QueueTaskState
 import com.romulus.mobile.downloads.queue.RecoveryDecision
 import java.time.Clock
 import java.time.Duration
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.selects.select
 
 internal class DownloadWorkerEntryPoint(
     private val queueService: QueueService,
@@ -71,54 +73,86 @@ internal class DownloadWorkerEntryPoint(
             .getOrElse { throwable ->
                 return Result.failure(throwable)
             }
-        while (true) {
-            val claims = claimAvailableTasks()
-            if (claims.isEmpty()) {
-                workScheduler.synchronizeAuthRecovery().getOrElse { throwable ->
-                    return Result.failure(throwable)
-                }
-                val latestWakeGeneration = queueService.readWakeGeneration()
-                if (latestWakeGeneration != observedWakeGeneration) {
-                    observedWakeGeneration =
-                        queueService.acknowledgeDispatchStart().getOrElse { throwable ->
-                            return Result.failure(throwable)
-                        }
-                    continue
-                }
-                return workScheduler.scheduleNextDeferredWake()
-            }
-            val processingResult = coroutineScope {
-                claims.map { claim ->
-                    async {
-                        processClaim(claim)
+        return coroutineScope {
+            val activeAttempts = linkedSetOf<Deferred<Result<Unit>>>()
+            while (true) {
+                fillAvailableSlots(activeAttempts)
+                if (activeAttempts.isEmpty()) {
+                    workScheduler.synchronizeAuthRecovery().getOrElse { throwable ->
+                        return@coroutineScope Result.failure(throwable)
                     }
-                }.awaitAll()
-            }
-            processingResult.firstFailure()?.let { failure ->
-                return Result.failure(failure)
-            }
-            observedWakeGeneration = queueService.acknowledgeDispatchStart()
-                .getOrElse { throwable ->
-                    return Result.failure(throwable)
+                    val latestWakeGeneration = queueService.readWakeGeneration()
+                    if (latestWakeGeneration != observedWakeGeneration) {
+                        observedWakeGeneration =
+                            queueService.acknowledgeDispatchStart().getOrElse { throwable ->
+                                return@coroutineScope Result.failure(throwable)
+                            }
+                        continue
+                    }
+                    return@coroutineScope workScheduler.scheduleNextDeferredWake()
                 }
+                val completedAttempt = awaitNextAttempt(activeAttempts)
+                activeAttempts.remove(completedAttempt.deferred)
+                completedAttempt.result.exceptionOrNull()?.let { failure ->
+                    return@coroutineScope Result.failure(failure)
+                }
+            }
+            @Suppress("UnreachableCode")
+            Result.success(Unit)
         }
     }
 
-    private suspend fun claimAvailableTasks(): List<QueueClaim> {
-        val claimLimit = workScheduler.readClaimLimit()
+    private suspend fun kotlinx.coroutines.CoroutineScope.fillAvailableSlots(
+        activeAttempts: MutableSet<Deferred<Result<Unit>>>
+    ) {
+        while (true) {
+            val remainingSlots = workScheduler.readClaimLimit() - activeAttempts.size
+            if (remainingSlots <= 0) {
+                return
+            }
+            val claims = claimAvailableTasks(limit = remainingSlots)
+            if (claims.isEmpty()) {
+                return
+            }
+            claims.forEach { claim ->
+                activeAttempts += async {
+                    processClaim(claim)
+                }
+            }
+        }
+    }
+
+    private suspend fun claimAvailableTasks(limit: Int): List<QueueClaim> {
+        if (limit <= 0) {
+            return emptyList()
+        }
         val gate = workScheduler.readGate()
         return if (gate.authBlocked) {
             queueService.claimActionRecoveryTasks(
                 now = clock.instant(),
-                limit = claimLimit
+                limit = limit
             )
         } else {
             queueService.claimRunnableTasks(
                 now = clock.instant(),
-                limit = claimLimit
+                limit = limit
             )
         }
     }
+
+    private suspend fun awaitNextAttempt(
+        activeAttempts: Set<Deferred<Result<Unit>>>
+    ): CompletedAttempt =
+        select {
+            activeAttempts.forEach { deferred ->
+                deferred.onAwait { result ->
+                    CompletedAttempt(
+                        deferred = deferred,
+                        result = result
+                    )
+                }
+            }
+        }
 
     @Suppress("CyclomaticComplexMethod", "LongMethod", "ReturnCount")
     private suspend fun processClaim(claim: QueueClaim): Result<Unit> {
@@ -259,6 +293,8 @@ internal class DownloadWorkerEntryPoint(
         val RETRY_DELAY_THIRD: Duration = Duration.ofSeconds(60)
     }
 }
+
+private data class CompletedAttempt(val deferred: Deferred<Result<Unit>>, val result: Result<Unit>)
 
 private fun List<Result<Unit>>.firstFailure(): Throwable? =
     firstOrNull(Result<Unit>::isFailure)?.exceptionOrNull()

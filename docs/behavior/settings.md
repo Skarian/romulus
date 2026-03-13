@@ -22,24 +22,25 @@
    - concurrency save.
 6. Concurrency is adjusted with a discrete slider.
 7. Concurrency must be between `1` and `5`.
-8. Source mode supports URL and file.
-9. Settings does not expose manual source refresh.
-10. `Active downloads` means active states from [`status-model.md`](status-model.md).
-11. When Home is in the invalid-settings error state, Settings is the place where the user fixes the broken saved setting; shell visibility behavior follows [`app-shell.md`](app-shell.md).
-12. Settings includes `Diagnostics` controls:
+8. Concurrency means the maximum number of simultaneous active queue attempts; when one active attempt finishes, the next queued attempt may start immediately without waiting for the rest of the active set to finish.
+9. Source mode supports URL and file.
+10. Settings does not expose manual source refresh.
+11. `Active downloads` means active states from [`status-model.md`](status-model.md).
+12. When Home is in the invalid-settings error state, Settings is the place where the user fixes the broken saved setting; shell visibility behavior follows [`app-shell.md`](app-shell.md).
+13. Settings includes `Diagnostics` controls:
    - `Enable diagnostics` toggle,
    - `Clear diagnostics` action,
    - `Export` action.
-13. `Enable diagnostics` takes effect immediately and persists as a settings value; persistence rules follow [`persistence.md`](persistence.md).
-14. `Clear diagnostics` requires confirmation before changes are applied.
-15. Diagnostics actions remain available while downloads are active.
-16. `Clear diagnostics` and `Export` show toast feedback on success or failure.
-17. Diagnostics data, retention, and export semantics follow [`diagnostics.md`](diagnostics.md).
-18. Saving an API key performs live Real-Debrid validation.
-19. API key save succeeds only when the new key validates successfully and replaces the prior saved key.
-20. If API key validation fails, the previously saved valid key remains unchanged.
-21. Cancelling source reselection or download-directory reselection leaves the previously saved value unchanged.
-22. When diagnostics is enabled, Settings events are captured:
+14. `Enable diagnostics` takes effect immediately and persists as a settings value; persistence rules follow [`persistence.md`](persistence.md).
+15. `Clear diagnostics` requires confirmation before changes are applied.
+16. Diagnostics actions remain available while downloads are active.
+17. `Clear diagnostics` and `Export` show toast feedback on success or failure.
+18. Diagnostics data, retention, and export semantics follow [`diagnostics.md`](diagnostics.md).
+19. Saving an API key performs live Real-Debrid validation.
+20. API key save succeeds only when the new key validates successfully and replaces the prior saved key.
+21. If API key validation fails, the previously saved valid key remains unchanged.
+22. Cancelling source reselection or download-directory reselection leaves the previously saved value unchanged.
+23. When diagnostics is enabled, Settings events are captured:
    - settings edit and save attempts,
    - settings save outcomes,
    - diagnostics control actions and outcomes.

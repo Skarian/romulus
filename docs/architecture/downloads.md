@@ -1032,7 +1032,7 @@ class OutputCleanupService(
 ### `DownloadWorkerEntryPoint.kt`
 - Internal area: `downloads/work`
 - Purpose: own worker runtime entrypoints.
-- Responsibility: ask `WorkScheduler` for the runtime claim limit and auth-gate state, claim runnable work, apply recovery decisions, register live control handles, dispatch the correct attempt runner, commit outcomes through `QueueService`, and schedule the next retry-at wake when work remains deferred.
+- Responsibility: ask `WorkScheduler` for the runtime claim limit and auth-gate state, keep up to that many active attempts running by refilling freed slots from the runnable queue, apply recovery decisions, register live control handles, dispatch the correct attempt runner, commit outcomes through `QueueService`, and schedule the next retry-at wake when work remains deferred.
 - Depends on: `QueueService`, `QueueRecoveryPolicy`, `WorkScheduler`, `ExecutionControlRegistry`, attempt runners
 - Must not depend on: UI classes
 - Visibility: `public`
@@ -1177,7 +1177,7 @@ class QueueNotificationPresenter(
    - Queue projection later renders rows newest-first by `createdAt`.
 
 2. Standard attempt execution:
-   - `DownloadWorkerEntryPoint` asks `WorkScheduler` for the current claim limit derived from persisted max concurrency.
+   - `DownloadWorkerEntryPoint` asks `WorkScheduler` for the current claim limit derived from persisted max concurrency and treats it as the maximum number of simultaneous active attempts.
    - `DownloadWorkerEntryPoint` checks the queue-global auth gate before starting new provider-dependent work.
    - `DownloadLedgerStore` may return stale interrupted claims whose leases expired; `QueueRecoveryPolicy` then decides whether they resume or safely requeue.
    - A claimed row enters `Resolving` while `downloads/attempts` rehydrates row context, refreshes the current download unit, and decides whether provider acquisition is needed.
@@ -1226,6 +1226,7 @@ class QueueNotificationPresenter(
    - `WorkScheduler` reads `DownloadSettingsState.maxConcurrency` at runtime and converts it into the next worker claim limit.
    - `QueueService` advances queue-owned dispatch generation under the ledger lock on enqueue, resume, manual retry, and restart, then asks `WorkScheduler` for the best-effort worker nudge.
    - `DownloadWorkerEntryPoint` acknowledges the current dispatch generation when it actually begins draining; a requested wake is not considered satisfied merely because the launcher accepted a request.
+   - While the worker stays alive, it refills freed attempt slots immediately from queued runnable work instead of waiting for the entire previously claimed batch to finish.
    - `app/` requests worker wake on completed-setup app launch through `WorkWakeReason.APP_LAUNCH_RECOVERY`.
    - `WorkScheduler` watches token readiness and requests `WorkWakeReason.AUTH_RECOVERED` automatically when a previously broken token becomes usable again, while the worker drain loop also reconciles auth recovery synchronously before exit so the durable dispatch generation cannot be missed at the empty-queue boundary.
    - `QueueService.scheduleRetry(...)` persists `retryAt` and asks `WorkScheduler` to schedule the earliest deferred wake.

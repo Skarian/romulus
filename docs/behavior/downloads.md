@@ -79,7 +79,7 @@
 ## Queue Intake
 
 1. Starting downloads appends selected files to the end of queue order, whether selected from standard Files mode or archive-selection mode.
-2. Queue processing order is first-in-first-out, limited only by configured concurrency.
+2. Queue processing order is first-in-first-out, limited only by configured concurrency; configured concurrency is a live active-attempt cap, so freed slots refill immediately from the queued backlog while other attempts are still running.
 3. Downloads page list order is newest-first for readability and does not change queue processing order.
 4. Queueing the same source file again creates a new queue row.
 5. `Retry` and `Restart` reuse the same queue row and do not create a new row.

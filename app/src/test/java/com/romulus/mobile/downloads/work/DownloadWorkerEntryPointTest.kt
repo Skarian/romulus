@@ -7,6 +7,9 @@ import com.romulus.mobile.downloads.FakeOutputDirectoryAccess
 import com.romulus.mobile.downloads.FakeOutputFilesystem
 import com.romulus.mobile.downloads.FakeProviderRuntimeGateway
 import com.romulus.mobile.downloads.RecordingWorkerLauncher
+import com.romulus.mobile.downloads.attempts.DownloadStream
+import com.romulus.mobile.downloads.attempts.DownloadTransport
+import com.romulus.mobile.downloads.attempts.ProviderRuntimeGateway
 import com.romulus.mobile.downloads.attempts.ArchiveEntryAttemptRunner
 import com.romulus.mobile.downloads.attempts.StandardAttemptRunner
 import com.romulus.mobile.downloads.config.DownloadSettingsService
@@ -28,9 +31,20 @@ import com.romulus.mobile.downloads.queue.QueueTaskState
 import com.romulus.mobile.downloads.queue.TransferCheckpoint
 import com.romulus.mobile.downloads.sampleQueueTaskInput
 import com.romulus.mobile.realdebrid.AcquisitionStatus
+import com.romulus.mobile.realdebrid.ProviderSelectionRequest
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.io.ByteArrayInputStream
+import java.io.Closeable
+import java.io.InputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.io.path.createTempDirectory
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -805,6 +819,83 @@ class DownloadWorkerEntryPointTest {
         assertEquals(QueueTaskState.Completed, checkNotNull(ledgerStore.readRow(taskId)).state)
     }
 
+    @Test
+    fun runUntilDrainedRefillsFreedSlotBeforeSlowestAttemptFinishes() = runTest {
+        val clock = Clock.fixed(Instant.parse("2026-03-11T01:00:00Z"), ZoneOffset.UTC)
+        val ledgerStore = FileDownloadLedgerStore(
+            ledgerFile = createTempDirectory("worker-ledger").toFile().resolve("ledger.json"),
+            json = queueJson(),
+            clock = clock
+        )
+        val settingsService = DownloadSettingsService.create(
+            store = FakeDownloadSettingsStore().apply {
+                persistedState = DownloadSettingsState(
+                    outputDirectoryUri = "content://downloads/tree",
+                    maxConcurrency = 2
+                )
+            },
+            outputAccess = FakeOutputDirectoryAccess(
+                usableUris = setOf("content://downloads/tree")
+            )
+        )
+        val providerGateway = NamedFileProviderRuntimeGateway()
+        val outputFilesystem = FakeOutputFilesystem(createTempDirectory("worker-output").toFile())
+        val workScheduler = WorkScheduler(
+            settingsService = settingsService,
+            ledgerStore = ledgerStore,
+            providerGateway = providerGateway,
+            workerLauncher = RecordingWorkerLauncher(),
+            clock = clock
+        )
+        val queueService = QueueService(
+            ledgerStore = ledgerStore,
+            executionControlRegistry = ExecutionControlRegistry(),
+            outputCleanupService = OutputCleanupService(outputFilesystem),
+            workScheduler = workScheduler,
+            clock = clock
+        )
+        queueService.enqueue(
+            listOf(
+                sampleQueueTaskInput("slow.mkv"),
+                sampleQueueTaskInput("fast.mkv"),
+                sampleQueueTaskInput("late.mkv")
+            )
+        )
+        val slowStarted = CountDownLatch(1)
+        val lateStarted = CountDownLatch(1)
+        val releaseSlow = CountDownLatch(1)
+        val downloadTransport = SlotTrackingDownloadTransport(
+            slowFileName = "slow.mkv",
+            slowStarted = slowStarted,
+            lateStarted = lateStarted,
+            releaseSlow = releaseSlow
+        )
+        val entryPoint = createEntryPoint(
+            ledgerStore = ledgerStore,
+            settingsService = settingsService,
+            providerGateway = providerGateway,
+            outputFilesystem = outputFilesystem,
+            workScheduler = workScheduler,
+            queueService = queueService,
+            clock = clock,
+            downloadTransport = downloadTransport
+        )
+
+        val resultDeferred = async(Dispatchers.Default) { entryPoint.runUntilDrained() }
+
+        assertTrue(slowStarted.await(2, TimeUnit.SECONDS))
+        assertTrue(lateStarted.await(2, TimeUnit.SECONDS))
+        assertEquals(2, downloadTransport.maxActiveCount.get())
+
+        releaseSlow.countDown()
+
+        val result = resultDeferred.await()
+
+        assertTrue(result.isSuccess)
+        assertTrue(ledgerStore.readRows().all { row -> row.state == QueueTaskState.Completed })
+        assertEquals(2, downloadTransport.maxActiveCount.get())
+    }
+
     private fun queueJson(): Json = Json {
         encodeDefaults = true
         ignoreUnknownKeys = true
@@ -814,11 +905,12 @@ class DownloadWorkerEntryPointTest {
     private fun createEntryPoint(
         ledgerStore: DownloadLedgerStore,
         settingsService: DownloadSettingsService,
-        providerGateway: FakeProviderRuntimeGateway,
+        providerGateway: ProviderRuntimeGateway,
         outputFilesystem: FakeOutputFilesystem,
         workScheduler: WorkScheduler,
         queueService: QueueService,
-        clock: Clock
+        clock: Clock,
+        downloadTransport: DownloadTransport = FakeDownloadTransport("test".encodeToByteArray())
     ): DownloadWorkerEntryPoint = DownloadWorkerEntryPoint(
         queueService = queueService,
         recoveryPolicy = QueueRecoveryPolicy(
@@ -835,7 +927,7 @@ class DownloadWorkerEntryPointTest {
         executionControlRegistry = ExecutionControlRegistry(),
         standardAttemptRunner = StandardAttemptRunner(
             providerGateway = providerGateway,
-            downloadTransport = FakeDownloadTransport("test".encodeToByteArray()),
+            downloadTransport = downloadTransport,
             outputReservationService = OutputReservationService(
                 outputFilesystem = outputFilesystem,
                 outputRootResolver = OutputRootResolver(
@@ -883,5 +975,118 @@ private class WakeGenerationCallbackLedgerStore(
         wakeObservations += 1
         onWakeObservation(wakeObservations)
         return delegate.acknowledgeDispatchStart()
+    }
+}
+
+private class NamedFileProviderRuntimeGateway : ProviderRuntimeGateway {
+    private val readiness = MutableStateFlow(
+        com.romulus.mobile.realdebrid.auth.TokenReadiness(
+            isUsable = true,
+            brokenReason = null
+        )
+    )
+
+    override fun observeTokenReadiness() = readiness
+
+    override suspend fun readTokenReadiness() = readiness.value
+
+    override suspend fun startAcquisition(
+        request: ProviderSelectionRequest
+    ): Result<AcquisitionStatus> {
+        val fileName = request.normalizedPath.substringAfterLast('/')
+        return Result.success(
+            AcquisitionStatus.LinksReady(
+                resumeMarker = ProviderResumeMarker(
+                    torrentId = "download-$fileName",
+                    sourceMagnetUri = request.sourceMagnetUri,
+                    selectedProviderFileIds = listOf("provider-$fileName")
+                ),
+                readyLinks = listOf(ProviderReadyLink("https://restricted.example/$fileName"))
+            )
+        )
+    }
+
+    override suspend fun resumeAcquisition(
+        marker: ProviderResumeMarker
+    ): Result<AcquisitionStatus> =
+        Result.failure(IllegalStateException("Resume was not expected in this test"))
+
+    override suspend fun resolveReadyLink(
+        link: ProviderReadyLink
+    ): Result<ResolvedDownloadUnit> {
+        val fileName = link.restrictedUrl.substringAfterLast('/')
+        return Result.success(
+            ResolvedDownloadUnit(
+                downloadUrl = "https://download.example/$fileName",
+                originalName = fileName,
+                sizeBytes = fileName.encodeToByteArray().size.toLong()
+            )
+        )
+    }
+}
+
+private class SlotTrackingDownloadTransport(
+    private val slowFileName: String,
+    private val slowStarted: CountDownLatch,
+    private val lateStarted: CountDownLatch,
+    private val releaseSlow: CountDownLatch
+) : DownloadTransport {
+    val maxActiveCount = AtomicInteger(0)
+    private val activeCount = AtomicInteger(0)
+
+    override suspend fun open(url: String, resumeByteOffset: Long): Result<DownloadStream> {
+        val fileName = url.substringAfterLast('/')
+        val activeNow = activeCount.incrementAndGet()
+        maxActiveCount.updateAndGet { current -> maxOf(current, activeNow) }
+        if (fileName == "late.mkv") {
+            lateStarted.countDown()
+        }
+        val bytes = fileName.encodeToByteArray()
+        val inputStream = if (fileName == slowFileName) {
+            BlockingInputStream(
+                delegate = ByteArrayInputStream(bytes),
+                started = slowStarted,
+                release = releaseSlow
+            )
+        } else {
+            ByteArrayInputStream(bytes)
+        }
+        return Result.success(
+            DownloadStream(
+                inputStream = inputStream,
+                totalBytes = bytes.size.toLong(),
+                resumeAccepted = resumeByteOffset == 0L,
+                closeable = Closeable {
+                    activeCount.decrementAndGet()
+                }
+            )
+        )
+    }
+}
+
+private class BlockingInputStream(
+    private val delegate: ByteArrayInputStream,
+    private val started: CountDownLatch,
+    private val release: CountDownLatch
+) : InputStream() {
+    private val startSignaled = AtomicBoolean(false)
+
+    override fun read(): Int {
+        blockIfNeeded()
+        return delegate.read()
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        blockIfNeeded()
+        return delegate.read(b, off, len)
+    }
+
+    private fun blockIfNeeded() {
+        if (startSignaled.compareAndSet(false, true)) {
+            started.countDown()
+        }
+        check(release.await(2, TimeUnit.SECONDS)) {
+            "Slow download was not released in time"
+        }
     }
 }
