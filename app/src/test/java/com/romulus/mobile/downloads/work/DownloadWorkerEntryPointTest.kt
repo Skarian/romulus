@@ -896,6 +896,127 @@ class DownloadWorkerEntryPointTest {
         assertEquals(2, downloadTransport.maxActiveCount.get())
     }
 
+    @Test
+    fun runUntilDrainedHonorsPendingCancelWhenTransferFailsAfterCancelRequest() = runTest {
+        val clock = Clock.fixed(Instant.parse("2026-03-11T01:30:00Z"), ZoneOffset.UTC)
+        val ledgerStore = FileDownloadLedgerStore(
+            ledgerFile = createTempDirectory("worker-ledger").toFile().resolve("ledger.json"),
+            json = queueJson(),
+            clock = clock
+        )
+        val settingsService = DownloadSettingsService.create(
+            store = FakeDownloadSettingsStore().apply {
+                persistedState = DownloadSettingsState(
+                    outputDirectoryUri = "content://downloads/tree",
+                    maxConcurrency = 1
+                )
+            },
+            outputAccess = FakeOutputDirectoryAccess(
+                usableUris = setOf("content://downloads/tree")
+            )
+        )
+        val providerGateway = FakeProviderRuntimeGateway().apply {
+            startResult = Result.success(
+                AcquisitionStatus.LinksReady(
+                    resumeMarker = ProviderResumeMarker(
+                        torrentId = "download-torrent",
+                        sourceMagnetUri = "magnet:?xt=urn:btih:source",
+                        selectedProviderFileIds = listOf("provider-file")
+                    ),
+                    readyLinks = listOf(ProviderReadyLink("https://restricted.example/file"))
+                )
+            )
+            resolveResult = Result.success(
+                ResolvedDownloadUnit(
+                    downloadUrl = "https://download.example/file",
+                    originalName = "Episode.mkv",
+                    sizeBytes = 4
+                )
+            )
+        }
+        val outputFilesystem = FakeOutputFilesystem(createTempDirectory("worker-output").toFile())
+        val executionControlRegistry = ExecutionControlRegistry()
+        val workScheduler = WorkScheduler(
+            settingsService = settingsService,
+            ledgerStore = ledgerStore,
+            providerGateway = providerGateway,
+            workerLauncher = RecordingWorkerLauncher(),
+            clock = clock
+        )
+        val queueService = QueueService(
+            ledgerStore = ledgerStore,
+            executionControlRegistry = executionControlRegistry,
+            outputCleanupService = OutputCleanupService(outputFilesystem),
+            workScheduler = workScheduler,
+            clock = clock
+        )
+        val enqueueResult = queueService.enqueue(listOf(sampleQueueTaskInput("Episode.mkv")))
+        val taskId = (enqueueResult as EnqueueResult.Enqueued).taskIds.single()
+        val firstChunkRead = CountDownLatch(1)
+        val allowFailure = CountDownLatch(1)
+        val entryPoint = DownloadWorkerEntryPoint(
+            queueService = queueService,
+            recoveryPolicy = QueueRecoveryPolicy(
+                outputReservationService = OutputReservationService(
+                    outputFilesystem = outputFilesystem,
+                    outputRootResolver = OutputRootResolver(
+                        settingsService = settingsService,
+                        clock = clock
+                    ),
+                    artifactRoot = createTempDirectory("worker-artifacts").toFile()
+                )
+            ),
+            workScheduler = workScheduler,
+            executionControlRegistry = executionControlRegistry,
+            standardAttemptRunner = StandardAttemptRunner(
+                providerGateway = providerGateway,
+                downloadTransport = FailingAfterCancelDownloadTransport(
+                    firstChunkRead = firstChunkRead,
+                    allowFailure = allowFailure
+                ),
+                outputReservationService = OutputReservationService(
+                    outputFilesystem = outputFilesystem,
+                    outputRootResolver = OutputRootResolver(
+                        settingsService = settingsService,
+                        clock = clock
+                    ),
+                    artifactRoot = createTempDirectory("worker-artifacts-runner").toFile()
+                ),
+                outputFinalizer = OutputFinalizer(
+                    reservationService = OutputReservationService(
+                        outputFilesystem = outputFilesystem,
+                        outputRootResolver = OutputRootResolver(
+                            settingsService = settingsService,
+                            clock = clock
+                        ),
+                        artifactRoot = createTempDirectory("worker-artifacts-finalizer").toFile()
+                    ),
+                    extractionController = ArchiveExtractionController(
+                        archiveRuntime = com.romulus.mobile.downloads.FakeArchiveRuntime(),
+                        outputFilesystem = outputFilesystem
+                    ),
+                    outputFilesystem = outputFilesystem
+                ),
+                queueService = queueService,
+                clock = clock
+            ),
+            archiveEntryAttemptRunner = ArchiveEntryAttemptRunner(),
+            clock = clock
+        )
+
+        val resultDeferred = async(Dispatchers.Default) { entryPoint.runUntilDrained() }
+
+        assertTrue(firstChunkRead.await(2, TimeUnit.SECONDS))
+        queueService.performAction(com.romulus.mobile.downloads.queue.QueueActionCommand.Cancel(taskId))
+            .getOrThrow()
+        allowFailure.countDown()
+
+        val result = resultDeferred.await()
+
+        assertTrue(result.isSuccess)
+        assertTrue(checkNotNull(ledgerStore.readRow(taskId)).state is QueueTaskState.Cancelled)
+    }
+
     private fun queueJson(): Json = Json {
         encodeDefaults = true
         ignoreUnknownKeys = true
@@ -1089,4 +1210,49 @@ private class BlockingInputStream(
             "Slow download was not released in time"
         }
     }
+}
+
+private class FailingAfterCancelDownloadTransport(
+    private val firstChunkRead: CountDownLatch,
+    private val allowFailure: CountDownLatch
+) : DownloadTransport {
+    override suspend fun open(url: String, resumeByteOffset: Long): Result<DownloadStream> =
+        Result.success(
+            DownloadStream(
+                inputStream = object : InputStream() {
+                    private var readCount = 0
+
+                    override fun read(): Int {
+                        readCount += 1
+                        return when (readCount) {
+                            1 -> {
+                                firstChunkRead.countDown()
+                                'a'.code
+                            }
+
+                            2 -> {
+                                check(allowFailure.await(2, TimeUnit.SECONDS)) {
+                                    "Cancel-triggered failure was not released in time"
+                                }
+                                throw java.io.IOException("Transfer failed after cancel request")
+                            }
+
+                            else -> -1
+                        }
+                    }
+
+                    override fun read(b: ByteArray, off: Int, len: Int): Int {
+                        val value = read()
+                        if (value < 0) {
+                            return -1
+                        }
+                        b[off] = value.toByte()
+                        return 1
+                    }
+                },
+                totalBytes = 4L,
+                resumeAccepted = resumeByteOffset == 0L,
+                closeable = Closeable {}
+            )
+        )
 }

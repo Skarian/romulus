@@ -1,5 +1,6 @@
 package com.romulus.mobile.downloads.queue
 
+import com.romulus.mobile.downloads.attempts.AttemptOutcome
 import com.romulus.mobile.downloads.ConfigurableDownloadLedgerStore
 import com.romulus.mobile.downloads.FakeDownloadSettingsStore
 import com.romulus.mobile.downloads.FakeOutputDirectoryAccess
@@ -306,6 +307,55 @@ class QueueServiceTest {
         val finalRow = checkNotNull(store.readRow(taskId))
         assertTrue(finalRow.state is QueueTaskState.Cancelled)
         assertEquals(null, finalRow.pendingAction)
+    }
+
+    @Test
+    fun pendingCancelOverridesFailedOutcomeInsteadOfSchedulingRetry() = runTest {
+        val ledgerFile = createTempDirectory("queue-ledger").toFile().resolve("ledger.json")
+        val clock = Clock.fixed(Instant.parse("2026-03-10T19:57:00Z"), ZoneOffset.UTC)
+        val store = FileDownloadLedgerStore(
+            ledgerFile = ledgerFile,
+            json = queueJson(),
+            clock = clock
+        )
+        val scheduler = createScheduler(store, clock)
+        val service = QueueService(
+            ledgerStore = store,
+            executionControlRegistry = ExecutionControlRegistry(),
+            outputCleanupService = OutputCleanupService(
+                FakeOutputFilesystem(createTempDirectory("queue-output").toFile())
+            ),
+            workScheduler = scheduler,
+            clock = clock
+        )
+
+        val enqueueResult = service.enqueue(listOf(sampleQueueTaskInput("Cancel.mkv")))
+        val taskId = (enqueueResult as EnqueueResult.Enqueued).taskIds.single()
+        service.claimRunnableTasks(clock.instant(), limit = 1)
+        val checkpoint = TransferCheckpoint(
+            downloadedBytes = 5,
+            totalBytes = 10,
+            lastPersistedAt = clock.instant(),
+            tempFileToken = null,
+            resumeByteOffset = 5
+        )
+        service.recordRunning(taskId, checkpoint).getOrThrow()
+        service.performAction(QueueActionCommand.Cancel(taskId)).getOrThrow()
+
+        service.settleAttemptOutcome(
+            taskId = taskId,
+            outcome = AttemptOutcome.Failed(
+                reason = FailureReason.ProviderFailure(
+                    stage = "Download",
+                    message = "Transfer failed"
+                )
+            ),
+            attemptIndex = 1
+        ).getOrThrow()
+
+        val row = checkNotNull(store.readRow(taskId))
+        assertTrue(row.state is QueueTaskState.Cancelled)
+        assertEquals(null, row.pendingAction)
     }
 
     @Test

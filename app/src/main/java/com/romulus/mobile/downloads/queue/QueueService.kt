@@ -9,6 +9,7 @@
 
 package com.romulus.mobile.downloads.queue
 
+import com.romulus.mobile.downloads.attempts.AttemptOutcome
 import com.romulus.mobile.downloads.output.OutputCleanupScope
 import com.romulus.mobile.downloads.output.OutputCleanupService
 import com.romulus.mobile.downloads.output.FinalOutputRecord
@@ -229,6 +230,41 @@ internal class QueueService(
     ): Result<Unit> =
         ledgerStore.acknowledgeStop(taskId, checkpoint)
 
+    suspend fun settleAttemptOutcome(
+        taskId: TaskId,
+        outcome: AttemptOutcome,
+        attemptIndex: Int
+    ): Result<Unit> =
+        ledgerStore.readRow(taskId)?.let { row ->
+            if (
+                row.pendingAction?.action == PendingQueueAction.CANCEL &&
+                outcome !is AttemptOutcome.Completed
+            ) {
+                acknowledgeCancel(
+                    taskId = taskId,
+                    checkpoint = checkpointForCancelOverride(row, outcome)
+                )
+            } else {
+                when (outcome) {
+                    is AttemptOutcome.Completed -> complete(
+                        taskId = taskId,
+                        outputs = outcome.outputs
+                    )
+
+                    is AttemptOutcome.Paused -> acknowledgePause(taskId, outcome.checkpoint)
+
+                    is AttemptOutcome.Cancelled -> acknowledgeCancel(taskId, outcome.checkpoint)
+
+                    is AttemptOutcome.Failed -> settleFailure(
+                        taskId = taskId,
+                        reason = outcome.reason,
+                        attemptIndex = attemptIndex,
+                        retryable = outcome.retryable
+                    )
+                }
+            }
+        } ?: Result.failure(IllegalStateException("Unknown task ${taskId.value}"))
+
     suspend fun scheduleRetry(taskId: TaskId, retryAt: Instant, attemptIndex: Int): Result<Unit> =
         ledgerStore.persistState(
             taskId,
@@ -248,6 +284,27 @@ internal class QueueService(
 
     suspend fun fail(taskId: TaskId, reason: FailureReason): Result<Unit> =
         ledgerStore.persistState(taskId, QueueTaskState.Failed(reason))
+
+    private suspend fun settleFailure(
+        taskId: TaskId,
+        reason: FailureReason,
+        attemptIndex: Int,
+        retryable: Boolean
+    ): Result<Unit> {
+        val retryDelay = retryDelayFor(
+            reason = reason,
+            attemptIndex = attemptIndex,
+            retryable = retryable
+        )
+        if (retryDelay == null) {
+            return fail(taskId, reason)
+        }
+        return scheduleRetry(
+            taskId = taskId,
+            retryAt = clock.instant().plus(retryDelay),
+            attemptIndex = attemptIndex
+        )
+    }
 
     private suspend fun cancel(row: QueueRowRecord): Result<Unit> = when (row.state) {
         QueueTaskState.Queued,
@@ -291,6 +348,38 @@ internal class QueueService(
         is QueueTaskState.Cancelled -> Result.success(Unit)
     }
 
+    private fun checkpointForCancelOverride(
+        row: QueueRowRecord,
+        outcome: AttemptOutcome
+    ): TransferCheckpoint? = when (outcome) {
+        is AttemptOutcome.Paused -> outcome.checkpoint
+        is AttemptOutcome.Cancelled -> outcome.checkpoint
+        is AttemptOutcome.Failed,
+        is AttemptOutcome.Completed -> when (val state = row.state) {
+            is QueueTaskState.Running -> state.checkpoint
+            is QueueTaskState.Paused -> state.checkpoint
+            else -> null
+        }
+    }
+
+    private fun retryDelayFor(
+        reason: FailureReason,
+        attemptIndex: Int,
+        retryable: Boolean
+    ): java.time.Duration? =
+        when {
+            !retryable -> null
+            reason is FailureReason.AuthRequired ||
+                reason is FailureReason.DirectoryAccessFailure -> null
+
+            else -> when (attemptIndex) {
+            FIRST_ATTEMPT_INDEX -> java.time.Duration.ZERO
+            SECOND_ATTEMPT_INDEX -> RETRY_DELAY_SECOND
+            THIRD_ATTEMPT_INDEX -> RETRY_DELAY_THIRD
+            else -> null
+        }
+        }
+
     private fun QueueRowRecord.restartCleanupScopes(): List<OutputCleanupScope> =
         cleanupScopes + listOfNotNull(
             OutputCleanupScope(
@@ -298,4 +387,12 @@ internal class QueueService(
                 finalOutputs = finalOutputs
             ).takeIf { scope -> scope.reservation != null || scope.finalOutputs.isNotEmpty() }
         )
+
+    private companion object {
+        const val FIRST_ATTEMPT_INDEX = 1
+        const val SECOND_ATTEMPT_INDEX = 2
+        const val THIRD_ATTEMPT_INDEX = 3
+        val RETRY_DELAY_SECOND: java.time.Duration = java.time.Duration.ofSeconds(15)
+        val RETRY_DELAY_THIRD: java.time.Duration = java.time.Duration.ofSeconds(60)
+    }
 }

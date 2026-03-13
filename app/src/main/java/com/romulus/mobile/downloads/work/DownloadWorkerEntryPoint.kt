@@ -10,14 +10,12 @@ package com.romulus.mobile.downloads.work
 
 import com.romulus.mobile.downloads.attempts.ArchiveEntryAttemptRunner
 import com.romulus.mobile.downloads.attempts.StandardAttemptRunner
-import com.romulus.mobile.downloads.queue.FailureReason
 import com.romulus.mobile.downloads.queue.QueueClaim
 import com.romulus.mobile.downloads.queue.QueueExecutionContext
 import com.romulus.mobile.downloads.queue.QueueService
 import com.romulus.mobile.downloads.queue.QueueTaskState
 import com.romulus.mobile.downloads.queue.RecoveryDecision
 import java.time.Clock
-import java.time.Duration
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -206,27 +204,11 @@ internal class DownloadWorkerEntryPoint(
                     controlHandle
                 )
             }
-            return when (outcome) {
-                is com.romulus.mobile.downloads.attempts.AttemptOutcome.Completed ->
-                    queueService.complete(
-                        taskId = claim.task.taskId,
-                        outputs = outcome.outputs
-                    )
-
-                is com.romulus.mobile.downloads.attempts.AttemptOutcome.Paused ->
-                    queueService.acknowledgePause(claim.task.taskId, outcome.checkpoint)
-
-                is com.romulus.mobile.downloads.attempts.AttemptOutcome.Cancelled ->
-                    queueService.acknowledgeCancel(claim.task.taskId, outcome.checkpoint)
-
-                is com.romulus.mobile.downloads.attempts.AttemptOutcome.Failed ->
-                    handleFailure(
-                        claim = claim,
-                        reason = outcome.reason,
-                        attemptIndex = attemptIndex,
-                        retryable = outcome.retryable
-                    )
-            }
+            return queueService.settleAttemptOutcome(
+                taskId = claim.task.taskId,
+                outcome = outcome,
+                attemptIndex = attemptIndex
+            )
         } finally {
             executionControlRegistry.unregister(claim.task.taskId)
         }
@@ -242,55 +224,6 @@ internal class DownloadWorkerEntryPoint(
             }
         }
         return queueService.beginAttempt(claim.task.taskId)
-    }
-
-    private suspend fun handleFailure(
-        claim: QueueClaim,
-        reason: FailureReason,
-        attemptIndex: Int,
-        retryable: Boolean
-    ): Result<Unit> {
-        val retryDelay = retryDelayFor(
-            reason = reason,
-            attemptIndex = attemptIndex,
-            retryable = retryable
-        )
-        if (retryDelay == null) {
-            return queueService.fail(claim.task.taskId, reason)
-        }
-        return queueService.scheduleRetry(
-            taskId = claim.task.taskId,
-            retryAt = clock.instant().plus(retryDelay),
-            attemptIndex = attemptIndex
-        )
-    }
-
-    @Suppress("ReturnCount")
-    private fun retryDelayFor(
-        reason: FailureReason,
-        attemptIndex: Int,
-        retryable: Boolean
-    ): Duration? {
-        if (!retryable) {
-            return null
-        }
-        if (reason is FailureReason.AuthRequired || reason is FailureReason.DirectoryAccessFailure) {
-            return null
-        }
-        return when (attemptIndex) {
-            FIRST_ATTEMPT_INDEX -> Duration.ZERO
-            SECOND_ATTEMPT_INDEX -> RETRY_DELAY_SECOND
-            THIRD_ATTEMPT_INDEX -> RETRY_DELAY_THIRD
-            else -> null
-        }
-    }
-
-    private companion object {
-        const val FIRST_ATTEMPT_INDEX = 1
-        const val SECOND_ATTEMPT_INDEX = 2
-        const val THIRD_ATTEMPT_INDEX = 3
-        val RETRY_DELAY_SECOND: Duration = Duration.ofSeconds(15)
-        val RETRY_DELAY_THIRD: Duration = Duration.ofSeconds(60)
     }
 }
 

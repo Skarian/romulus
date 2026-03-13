@@ -527,7 +527,7 @@ interface DownloadLedgerStore {
 ### `QueueService.kt`
 - Internal area: `downloads/queue`
 - Purpose: own the canonical queue state machine.
-- Responsibility: create rows, accept user actions, persist progress, schedule retries, wake background work when the queue becomes runnable, and enforce visibility-only clear history.
+- Responsibility: create rows, accept user actions, persist progress, settle attempt outcomes so durable stop requests win over retry scheduling, wake background work when the queue becomes runnable, and enforce visibility-only clear history.
 - Depends on: `DownloadLedgerStore`, `ExecutionControlRegistry`, `OutputCleanupService`, `WorkScheduler`, `Clock`
 - Must not depend on: provider clients or UI classes
 - Visibility: `internal`
@@ -628,13 +628,11 @@ class QueueService(
     ): Result<Unit>
     suspend fun acknowledgePause(taskId: TaskId, checkpoint: TransferCheckpoint): Result<Unit>
     suspend fun acknowledgeCancel(taskId: TaskId, checkpoint: TransferCheckpoint?): Result<Unit>
-    suspend fun scheduleRetry(taskId: TaskId, retryAt: Instant, attemptIndex: Int): Result<Unit>
-    suspend fun complete(
+    suspend fun settleAttemptOutcome(
         taskId: TaskId,
-        reservation: OutputReservation,
-        outputs: List<FinalOutputRecord>
+        outcome: AttemptOutcome,
+        attemptIndex: Int
     ): Result<Unit>
-    suspend fun fail(taskId: TaskId, reason: FailureReason): Result<Unit>
 
     suspend fun clearHistory(includeFailed: Boolean): Result<Unit> {
         // Contract: this is visibility-only and all-or-nothing.
@@ -1204,7 +1202,8 @@ class QueueNotificationPresenter(
    - `QueueService.performAction(Cancel)` immediately transitions non-live states such as `Queued`, `Retry Scheduled`, or `Paused` to `Cancelled`.
    - For live `Preparing` or `Running` work, cancel persists a `QueueActionRequest` before signaling the live control registry.
    - If cancel arrives after pause was already requested but before the worker acknowledges stop, the durable cancel request wins and the row becomes `Cancelled` after the final checkpoint instead of getting stuck in `Paused`.
-   - The attempt loop observes the signal, stops network or file movement, writes a final checkpoint, and only then reports `Paused` or `Cancelled`.
+   - The attempt loop observes the signal, stops network or file movement, writes a final checkpoint, and only then reports `Paused` or `Cancelled` when it can do so directly.
+   - If a live attempt exits through a generic failure after cancel was already persisted but before that direct acknowledgement path completes, `QueueService.settleAttemptOutcome(...)` still honors the durable cancel request and converts the row to `Cancelled` instead of scheduling retry.
    - Queue state therefore never claims that work stopped before bytes actually stopped.
 
 5. Recovery after interruption:

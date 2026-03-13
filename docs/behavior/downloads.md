@@ -98,6 +98,8 @@
 | Cancelled | Restart |
 | Completed | Restart |
 
+17. When the user cancels a live `Preparing` or `Running` row, the row must finish as `Cancelled`; it must not fall through to `Retry Scheduled` or back into `Resolving` just because the in-flight attempt ended on a failure path after the durable cancel request was already recorded.
+
 ## History Cleanup
 
 1. Downloads page includes a top-level `Clear history` action.
