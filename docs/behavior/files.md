@@ -28,35 +28,36 @@
 9. File rows are sorted alphabetically by original file name in both modes:
    - standard mode uses torrent file names,
    - archive-selection mode uses internal zip file names.
-10. File rows display original file names.
-11. Search is a dialog with:
+10. Files page title shows the selected source name instead of a generic `Files` heading.
+11. File rows display original file names.
+12. Search is a dialog with:
    - a search box,
    - `Done` action,
    - `Clear` action.
-12. Search is case-insensitive and matches original file name only.
-13. Empty search query shows all files.
-14. If resolution succeeds but zero rows are visible after path, ignore, archive-selection, and search filtering, Files shows `No files available` empty state.
-15. Files page provides a `File preferences` dialog.
-16. `Apply rename` appears inside `File preferences` only when `entries[i].rename` exists with valid `pattern` and `replacement` fields.
-17. When shown, `Apply rename` initial toggle state is enabled.
-18. User can toggle `Apply rename` for the current Files page before queueing; this does not rewrite source JSON.
-19. `Unarchive` appears inside `File preferences` only when `entries[i].unarchive` key is present (even when its value is `false`).
-20. When shown, `Unarchive` initial toggle state equals `entries[i].unarchive`.
-21. User can toggle `Unarchive` for the current Files page before queueing; this does not rewrite source JSON.
-22. `Recursive unarchive` appears inside `File preferences` only when `entries[i].recursiveUnarchive` key is present (even when its value is `false`).
-23. When shown, `Recursive unarchive` is enabled only while `Unarchive` is enabled for the current Files page.
-24. When `Unarchive` is enabled, `Recursive unarchive` initial toggle state equals `entries[i].recursiveUnarchive`.
-25. When `Unarchive` is disabled, `Recursive unarchive` shows as off and non-interactive.
-26. User can toggle `Recursive unarchive` for the current Files page before queueing only while `Unarchive` is enabled; this does not rewrite source JSON.
-27. Queue payload normalizes `recursive-unarchive intent` to `false` whenever `unarchive intent` is `false`.
-28. Multi-select is supported.
-29. Select all and select none operate on visible rows only.
-30. Download action is disabled until at least one file is selected.
-31. File details dialog shows:
+13. Search is case-insensitive and matches original file name only.
+14. Empty search query shows all files.
+15. If resolution succeeds but zero rows are visible after path, ignore, archive-selection, and search filtering, Files shows `No files available` empty state.
+16. Files page provides a `File preferences` dialog.
+17. `Apply rename` appears inside `File preferences` only when `entries[i].rename` exists with valid `pattern` and `replacement` fields.
+18. When shown, `Apply rename` initial toggle state is enabled.
+19. User can toggle `Apply rename` for the current Files page before queueing; this does not rewrite source JSON.
+20. `Unarchive` appears inside `File preferences` only when `entries[i].unarchive` key is present (even when its value is `false`).
+21. When shown, `Unarchive` initial toggle state equals `entries[i].unarchive`.
+22. User can toggle `Unarchive` for the current Files page before queueing; this does not rewrite source JSON.
+23. `Recursive unarchive` appears inside `File preferences` only when `entries[i].recursiveUnarchive` key is present (even when its value is `false`).
+24. When shown, `Recursive unarchive` is enabled only while `Unarchive` is enabled for the current Files page.
+25. When `Unarchive` is enabled, `Recursive unarchive` initial toggle state equals `entries[i].recursiveUnarchive`.
+26. When `Unarchive` is disabled, `Recursive unarchive` shows as off and non-interactive.
+27. User can toggle `Recursive unarchive` for the current Files page before queueing only while `Unarchive` is enabled; this does not rewrite source JSON.
+28. Queue payload normalizes `recursive-unarchive intent` to `false` whenever `unarchive intent` is `false`.
+29. Multi-select is supported.
+30. Select all and select none operate on visible rows only.
+31. Download action is disabled until at least one file is selected.
+32. File details dialog shows:
    - original file name,
    - file size,
    - source context (`part label` and `torrent file id` when available).
-32. Queue payload preserves download intent fields:
+33. Queue payload preserves download intent fields:
    - snapshot identity,
    - entry identity,
    - file identity,

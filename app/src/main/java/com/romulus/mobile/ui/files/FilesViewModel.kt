@@ -28,9 +28,14 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class FilesRouteArgs(val snapshotId: SnapshotId, val entryId: SourceEntryId)
+data class FilesRouteArgs(
+    val snapshotId: SnapshotId,
+    val entryId: SourceEntryId,
+    val entryDisplayName: String
+)
 
 data class FilesUiState(
+    val entryDisplayName: String,
     val mode: FilesMode,
     val isResolving: Boolean,
     val rows: List<SelectableRowModel>,
@@ -69,6 +74,7 @@ class FilesViewModel(
     )
 
     private val resolvedItems = MutableStateFlow<List<SelectableItem>>(emptyList())
+    private val entryDisplayName = MutableStateFlow(routeArgs.entryDisplayName)
     private val mode = MutableStateFlow(FilesMode.STANDARD)
     private val isResolving = MutableStateFlow(false)
     private val selectedIds = MutableStateFlow<Set<SelectableItemId>>(emptySet())
@@ -94,12 +100,14 @@ class FilesViewModel(
     }
 
     val state: StateFlow<FilesUiState> = combine(
+        entryDisplayName,
         mode,
         isResolving,
         resolvedItems,
         localState
-    ) { browseMode, resolving, items, local ->
+    ) { currentEntryDisplayName, browseMode, resolving, items, local ->
         buildState(
+            entryDisplayName = currentEntryDisplayName,
             browseMode = browseMode,
             isResolving = resolving,
             items = items,
@@ -113,6 +121,7 @@ class FilesViewModel(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
         initialValue = buildState(
+            entryDisplayName = entryDisplayName.value,
             browseMode = mode.value,
             isResolving = isResolving.value,
             items = resolvedItems.value,
@@ -143,6 +152,10 @@ class FilesViewModel(
             ) {
                 is BrowseResult.Loaded -> {
                     resolvedItems.value = result.items
+                    entryDisplayName.value = result.items.firstOrNull()
+                        ?.sourceContext
+                        ?.entryDisplayName
+                        ?: routeArgs.entryDisplayName
                     mode.value = when (result.mode) {
                         BrowseMode.STANDARD -> FilesMode.STANDARD
                         BrowseMode.ARCHIVE_SELECTION -> FilesMode.ARCHIVE_SELECTION
@@ -158,6 +171,7 @@ class FilesViewModel(
 
                 is BrowseResult.Failed -> {
                     resolvedItems.value = emptyList()
+                    entryDisplayName.value = routeArgs.entryDisplayName
                     mode.value = FilesMode.STANDARD
                     selectedIds.value = emptySet()
                     preferences.value = FilePreferencesState.disabled()
@@ -211,6 +225,7 @@ class FilesViewModel(
     }
 
     private fun buildState(
+        entryDisplayName: String,
         browseMode: FilesMode,
         isResolving: Boolean,
         items: List<SelectableItem>,
@@ -228,6 +243,7 @@ class FilesViewModel(
         val rows = filteredItems.map { item -> item.toRowModel() }
 
         return FilesUiState(
+            entryDisplayName = entryDisplayName,
             mode = browseMode,
             isResolving = isResolving,
             rows = rows,

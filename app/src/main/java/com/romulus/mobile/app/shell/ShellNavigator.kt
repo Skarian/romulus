@@ -34,10 +34,11 @@ class ShellNavigator(diagnosticsFacade: DiagnosticsFacade) {
         }
     }
 
-    fun openFiles(snapshotId: SnapshotId, entryId: SourceEntryId) {
+    fun openFiles(snapshotId: SnapshotId, entryId: SourceEntryId, entryDisplayName: String) {
         val filesRoute = ShellRoute.Files(
             snapshotId = snapshotId,
-            entryId = entryId
+            entryId = entryId,
+            entryDisplayName = entryDisplayName
         )
         lastHomeRoute = filesRoute
         route.value = filesRoute

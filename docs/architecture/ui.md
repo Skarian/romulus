@@ -413,10 +413,12 @@ fun FilesScreen(
 ```kotlin
 data class FilesRouteArgs(
     val snapshotId: SnapshotId,
-    val entryId: SourceEntryId
+    val entryId: SourceEntryId,
+    val entryDisplayName: String
 )
 
 data class FilesUiState(
+    val entryDisplayName: String,
     val mode: FilesMode,
     val rows: List<SelectableRowModel>,
     val selectedIds: Set<SelectableItemId>,

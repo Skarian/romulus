@@ -196,7 +196,8 @@ fun ShellScaffold(
                             onOpenFiles = { filesRoute ->
                                 shellNavigator.openFiles(
                                     snapshotId = filesRoute.snapshotId,
-                                    entryId = filesRoute.entryId
+                                    entryId = filesRoute.entryId,
+                                    entryDisplayName = filesRoute.entryDisplayName
                                 )
                             },
                             modifier = Modifier.padding(innerPadding)
@@ -212,7 +213,8 @@ fun ShellScaffold(
                                 FilesViewModel(
                                     routeArgs = FilesRouteArgs(
                                         snapshotId = filesRoute.snapshotId,
-                                        entryId = filesRoute.entryId
+                                        entryId = filesRoute.entryId,
+                                        entryDisplayName = filesRoute.entryDisplayName
                                     ),
                                     sourceFacade = sourceFacade,
                                     downloadsFacade = downloadsFacade,

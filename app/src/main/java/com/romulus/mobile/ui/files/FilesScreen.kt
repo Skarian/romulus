@@ -80,11 +80,7 @@ fun FilesScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (state.mode == FilesMode.ARCHIVE_SELECTION) {
-                        "Archive files"
-                    } else {
-                        "Files"
-                    },
+                    text = state.entryDisplayName,
                     style = MaterialTheme.typography.titleMedium
                 )
                 Row(

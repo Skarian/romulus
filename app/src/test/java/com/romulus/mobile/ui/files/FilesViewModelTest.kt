@@ -30,7 +30,8 @@ class FilesViewModelTest {
             val viewModel = FilesViewModel(
                 routeArgs = FilesRouteArgs(
                     snapshotId = SnapshotId("snapshot"),
-                    entryId = SourceEntryId("entry")
+                    entryId = SourceEntryId("entry"),
+                    entryDisplayName = "Source name"
                 ),
                 sourceFacade = SourceFacade(),
                 downloadsFacade = DownloadsFacade(),
@@ -75,7 +76,8 @@ class FilesViewModelTest {
             val viewModel = FilesViewModel(
                 routeArgs = FilesRouteArgs(
                     snapshotId = SnapshotId("snapshot"),
-                    entryId = SourceEntryId("entry")
+                    entryId = SourceEntryId("entry"),
+                    entryDisplayName = "Source name"
                 ),
                 sourceFacade = SourceFacade(),
                 downloadsFacade = DownloadsFacade(),

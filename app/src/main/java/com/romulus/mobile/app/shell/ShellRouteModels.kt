@@ -6,7 +6,11 @@ import com.romulus.mobile.source.snapshot.SourceEntryId
 sealed interface ShellRoute {
     data object Home : ShellRoute
 
-    data class Files(val snapshotId: SnapshotId, val entryId: SourceEntryId) : ShellRoute
+    data class Files(
+        val snapshotId: SnapshotId,
+        val entryId: SourceEntryId,
+        val entryDisplayName: String
+    ) : ShellRoute
 
     data object Downloads : ShellRoute
 

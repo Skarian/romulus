@@ -39,7 +39,8 @@ class ShellNavigatorTest {
         navigator.enterShell(ShellRoute.Home)
         navigator.openFiles(
             snapshotId = SnapshotId("snapshot"),
-            entryId = SourceEntryId("entry")
+            entryId = SourceEntryId("entry"),
+            entryDisplayName = "Source name"
         )
         navigator.selectTab(ShellRoute.Downloads)
         navigator.selectTab(ShellRoute.Home)
@@ -47,7 +48,8 @@ class ShellNavigatorTest {
         assertEquals(
             ShellRoute.Files(
                 snapshotId = SnapshotId("snapshot"),
-                entryId = SourceEntryId("entry")
+                entryId = SourceEntryId("entry"),
+                entryDisplayName = "Source name"
             ),
             navigator.observeRoute().value
         )
@@ -60,7 +62,8 @@ class ShellNavigatorTest {
         navigator.enterShell(ShellRoute.Home)
         navigator.openFiles(
             snapshotId = SnapshotId("snapshot"),
-            entryId = SourceEntryId("entry")
+            entryId = SourceEntryId("entry"),
+            entryDisplayName = "Source name"
         )
 
         navigator.returnToHomeRoot()

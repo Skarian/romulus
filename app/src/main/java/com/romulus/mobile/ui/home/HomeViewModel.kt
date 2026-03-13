@@ -170,7 +170,8 @@ class HomeViewModel(
                             folderContext = row.folderContext,
                             routeArgs = FilesRouteArgs(
                                 snapshotId = homeState.snapshotId,
-                                entryId = row.entryId
+                                entryId = row.entryId,
+                                entryDisplayName = row.displayName
                             )
                         )
                     }
