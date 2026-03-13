@@ -2,6 +2,7 @@ package com.romulus.mobile.remotezip.probe
 
 internal data class RangeReadResult(
     val statusCode: Int,
+    val acceptsRanges: Boolean,
     val contentRange: String?,
     val body: ByteArray,
     val contentLength: Long?

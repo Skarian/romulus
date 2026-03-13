@@ -6,7 +6,7 @@
 
 ## Expected Result
 
-1. On page open, app shows resolving or loading state until file resolution finishes.
+1. On page open, app shows resolving or loading state until file resolution finishes or enters archive preparation.
 2. Files page chooses one resolution mode from entry `path`:
    - standard mode for directory or root scope,
    - archive-selection mode for an exact `.zip` file path, as defined in [`archive-selection.md`](archive-selection.md).
@@ -36,28 +36,29 @@
    - `Clear` action.
 13. Search is case-insensitive and matches original file name only.
 14. Empty search query shows all files.
-15. If resolution succeeds but zero rows are visible after path, ignore, archive-selection, and search filtering, Files shows `No files available` empty state.
-16. Files page provides a `File preferences` dialog.
-17. `Apply rename` appears inside `File preferences` only when `entries[i].rename` exists with valid `pattern` and `replacement` fields.
-18. When shown, `Apply rename` initial toggle state is enabled.
-19. User can toggle `Apply rename` for the current Files page before queueing; this does not rewrite source JSON.
-20. `Unarchive` appears inside `File preferences` only when `entries[i].unarchive` key is present (even when its value is `false`).
-21. When shown, `Unarchive` initial toggle state equals `entries[i].unarchive`.
-22. User can toggle `Unarchive` for the current Files page before queueing; this does not rewrite source JSON.
-23. `Recursive unarchive` appears inside `File preferences` only when `entries[i].recursiveUnarchive` key is present (even when its value is `false`).
-24. When shown, `Recursive unarchive` is enabled only while `Unarchive` is enabled for the current Files page.
-25. When `Unarchive` is enabled, `Recursive unarchive` initial toggle state equals `entries[i].recursiveUnarchive`.
-26. When `Unarchive` is disabled, `Recursive unarchive` shows as off and non-interactive.
-27. User can toggle `Recursive unarchive` for the current Files page before queueing only while `Unarchive` is enabled; this does not rewrite source JSON.
-28. Queue payload normalizes `recursive-unarchive intent` to `false` whenever `unarchive intent` is `false`.
-29. Multi-select is supported.
-30. Select all and select none operate on visible rows only.
-31. Download action is disabled until at least one file is selected.
-32. File details dialog shows:
+15. While archive-selection is waiting for the outer `.zip` to finish preparing in Real-Debrid, Files shows archive-preparation status and does not show `No files available`.
+16. If resolution succeeds but zero rows are visible after path, ignore, archive-selection, and search filtering, Files shows `No files available` empty state.
+17. Files page provides a `File preferences` dialog.
+18. `Apply rename` appears inside `File preferences` only when `entries[i].rename` exists with valid `pattern` and `replacement` fields.
+19. When shown, `Apply rename` initial toggle state is enabled.
+20. User can toggle `Apply rename` for the current Files page before queueing; this does not rewrite source JSON.
+21. `Unarchive` appears inside `File preferences` only when `entries[i].unarchive` key is present (even when its value is `false`).
+22. When shown, `Unarchive` initial toggle state equals `entries[i].unarchive`.
+23. User can toggle `Unarchive` for the current Files page before queueing; this does not rewrite source JSON.
+24. `Recursive unarchive` appears inside `File preferences` only when `entries[i].recursiveUnarchive` key is present (even when its value is `false`).
+25. When shown, `Recursive unarchive` is enabled only while `Unarchive` is enabled for the current Files page.
+26. When `Unarchive` is enabled, `Recursive unarchive` initial toggle state equals `entries[i].recursiveUnarchive`.
+27. When `Unarchive` is disabled, `Recursive unarchive` shows as off and non-interactive.
+28. User can toggle `Recursive unarchive` for the current Files page before queueing only while `Unarchive` is enabled; this does not rewrite source JSON.
+29. Queue payload normalizes `recursive-unarchive intent` to `false` whenever `unarchive intent` is `false`.
+30. Multi-select is supported.
+31. Select all and select none operate on visible rows only.
+32. Download action is disabled until at least one file is selected.
+33. File details dialog shows:
    - original file name,
    - file size,
    - source context (`part label` and `torrent file id` when available).
-33. Queue payload preserves download intent fields:
+34. Queue payload preserves download intent fields:
    - snapshot identity,
    - entry identity,
    - file identity,
@@ -67,13 +68,13 @@
    - storage target context,
    - source-derived execution context needed for later execution, retry, restart, and recovery without rebinding to a newer active snapshot:
      - torrent-native selection intent for standard mode,
-     - outer-zip locator plus archive-entry identity for archive-selection mode.
-33. Starting downloads shows confirmation and routes user to Downloads.
-34. Successful download start clears the current Files-page selection before the user later returns to that source entry.
-35. System back from Files returns the user to Home.
-36. Naming and rename semantics follow [`naming.md`](naming.md).
-37. Post-download unarchive behavior and archive handling follow [`downloads.md`](downloads.md).
-38. When diagnostics is enabled, Files events are captured:
+     - archive-preparation key plus archive-entry identity for archive-selection mode.
+35. Starting downloads shows confirmation and routes user to Downloads.
+36. Successful download start clears the current Files-page selection before the user later returns to that source entry.
+37. System back from Files returns the user to Home.
+38. Naming and rename semantics follow [`naming.md`](naming.md).
+39. Post-download unarchive behavior and archive handling follow [`downloads.md`](downloads.md).
+40. When diagnostics is enabled, Files events are captured:
    - file resolution start and outcome,
    - `Retry` action,
    - selection and select-all or select-none actions,

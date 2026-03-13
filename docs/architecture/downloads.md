@@ -359,7 +359,7 @@ sealed interface QueueExecutionContext {
     ) : QueueExecutionContext
 
     data class ArchiveEntry(
-        val outerZip: ArchiveContainerLocator,
+        val preparationKey: ArchivePreparationKey,
         val archiveEntryIdentity: ArchiveEntryIdentity
     ) : QueueExecutionContext
 }
@@ -786,7 +786,7 @@ class StandardAttemptRunner(
 ### `ArchiveEntryAttemptRunner.kt`
 - Internal area: `downloads/attempts`
 - Purpose: execute one archive-selection queue row.
-- Responsibility: refresh the outer ZIP URL, reopen the selected internal entry by stable identity, resume selected-entry copy from the saved byte offset when possible, and copy only that entry into the reserved artifact.
+- Responsibility: resolve the shared outer-ZIP preparation record to a ready container URL, reopen the selected internal entry by stable identity, resume selected-entry copy from the saved byte offset when possible, and copy only that entry into the reserved artifact.
 - Depends on: `RealDebridFacade`, `RemoteZipFacade`, `OutputReservationService`, `OutputFinalizer`, `QueueService`
 - Must not depend on: ledger stores directly or full-download fallback logic
 - Visibility: `internal`
@@ -808,6 +808,8 @@ class ArchiveEntryAttemptRunner(
     ): AttemptOutcome
 }
 ```
+
+Archive-entry execution persists the queue-stored archive-preparation key as its durable outer-container contract. At run time it resolves that key through the shared source-owned archive-preparation service, reuses the saved Real-Debrid resume marker when possible, and then copies only the selected internal file through `remotezip/`.
 
 ### `OutputRootResolver.kt`
 - Internal area: `downloads/output`
@@ -1191,7 +1193,7 @@ class QueueNotificationPresenter(
    - `QueueService.complete` stores `Completed` plus the canonical `FinalOutputRecord` set on the row envelope.
 
 3. Archive-selection attempt execution:
-   - `ArchiveEntryAttemptRunner` enters `Resolving` while it refreshes the outer ZIP URL through `realdebrid/`.
+   - `ArchiveEntryAttemptRunner` enters `Resolving` while it resolves the shared outer-ZIP preparation record to a fresh unrestricted container URL.
    - It reopens the selected internal entry through `remotezip/` by stable `ArchiveEntryIdentity`.
    - It copies only the selected entry into the reserved artifact and resumes from the saved offset when a checkpoint exists.
    - `OutputFinalizer` either direct-saves or extracts the copied artifact.

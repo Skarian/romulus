@@ -17,6 +17,7 @@ import com.romulus.mobile.realdebrid.links.UnrestrictedLinkResolver
 import java.time.Clock
 import kotlinx.coroutines.flow.StateFlow
 
+@Suppress("TooManyFunctions")
 class RealDebridFacade internal constructor(
     private val tokenService: TokenService,
     private val inventoryService: TorrentInventoryService,
@@ -49,6 +50,11 @@ class RealDebridFacade internal constructor(
             acquisitionPoller.start(request)
         }
 
+    suspend fun startAcquisition(locator: ProviderLocator): Result<AcquisitionStatus> =
+        requireUsableToken {
+            acquisitionPoller.start(locator)
+        }
+
     internal suspend fun enumerateProviderFiles(
         request: ProviderInventoryRequest
     ): Result<ProviderInventory> = requireUsableToken {
@@ -65,10 +71,17 @@ class RealDebridFacade internal constructor(
             linkResolver.resolve(link)
         }
 
-    suspend fun resolveExactZip(request: ExactZipRequest): Result<ArchiveContainerLocator> =
+    suspend fun findExactZipMatch(request: ExactZipRequest): Result<ProviderFileRecord> =
         requireUsableToken {
-            exactZipResolver.resolve(request)
+            exactZipResolver.findMatch(request)
         }
+
+    suspend fun materializeArchiveContainer(
+        exactMatch: ProviderFileRecord,
+        acquisitionStatus: AcquisitionStatus.LinksReady
+    ): Result<ArchiveContainerLocator> = requireUsableToken {
+        exactZipResolver.materialize(exactMatch, acquisitionStatus)
+    }
 
     private suspend fun <T> requireUsableToken(block: suspend () -> Result<T>): Result<T> {
         val readiness = tokenService.readReadiness()
@@ -114,7 +127,6 @@ class RealDebridFacade internal constructor(
                 ),
                 exactZipResolver = ExactZipResolver(
                     inventoryService = inventoryService,
-                    acquisitionPoller = acquisitionPoller,
                     budget = budget,
                     api = api
                 )
@@ -156,7 +168,6 @@ class RealDebridFacade internal constructor(
                 ),
                 exactZipResolver = ExactZipResolver(
                     inventoryService = inventoryService,
-                    acquisitionPoller = acquisitionPoller,
                     budget = budget,
                     api = api
                 )

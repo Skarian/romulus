@@ -5,11 +5,14 @@ package com.romulus.mobile.ui.files
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,9 +24,12 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -187,43 +193,53 @@ fun FilesScreen(
                 }
             }
 
-            TableHeaderRow {
-                Text(
-                    text = "File",
-                    modifier = Modifier.weight(0.8f),
-                    style = MaterialTheme.typography.labelMedium
-                )
-                Row(
-                    modifier = Modifier.weight(0.2f),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            if (state.preparing == null) {
+                TableHeaderRow {
                     Text(
-                        text = "Select",
+                        text = "File",
+                        modifier = Modifier.weight(0.8f),
                         style = MaterialTheme.typography.labelMedium
                     )
-                    IconButton(
-                        modifier = Modifier.size(26.dp),
-                        onClick = {
-                            val visibleIds = state.rows.map { row -> row.itemId }
-                            val allVisibleSelected = visibleIds.isNotEmpty() &&
-                                visibleIds.all { itemId -> itemId in state.selectedIds }
-                            if (allVisibleSelected) {
-                                viewModel.deselectVisible()
-                            } else {
-                                viewModel.selectAllVisible()
-                            }
-                        }
+                    Row(
+                        modifier = Modifier.weight(0.2f),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.SelectAll,
-                            contentDescription = "Toggle all visible rows"
+                        Text(
+                            text = "Select",
+                            style = MaterialTheme.typography.labelMedium
                         )
+                        IconButton(
+                            modifier = Modifier.size(26.dp),
+                            onClick = {
+                                val visibleIds = state.rows.map { row -> row.itemId }
+                                val allVisibleSelected = visibleIds.isNotEmpty() &&
+                                    visibleIds.all { itemId -> itemId in state.selectedIds }
+                                if (allVisibleSelected) {
+                                    viewModel.deselectVisible()
+                                } else {
+                                    viewModel.selectAllVisible()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.SelectAll,
+                                contentDescription = "Toggle all visible rows"
+                            )
+                        }
                     }
                 }
             }
 
-            if (state.isResolving) {
+            val preparingState = state.preparing
+            if (preparingState != null) {
+                ArchivePreparingCard(
+                    preparing = preparingState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
+            } else if (state.isResolving) {
                 Text("Loading files...")
             } else if (state.rows.isEmpty() && state.resolverError == null) {
                 Text("No files available")
@@ -411,6 +427,58 @@ fun FilesScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun ArchivePreparingCard(preparing: FilesPreparingState, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 460.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CircularProgressIndicator()
+                Text(
+                    text = "Getting files ready",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = "Acquiring files on Real-Debrid servers for you",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                preparing.progressPercent?.let { progressPercent ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { (progressPercent / 100.0).toFloat().coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = "Progress: ${progressPercent.toInt()}%",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                }
+                Text(
+                    text = "You can leave this screen and come back later. It may take a while.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

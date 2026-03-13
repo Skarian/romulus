@@ -11,6 +11,7 @@ import com.romulus.mobile.downloads.DownloadsFacade
 import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.remotezip.RemoteZipFacade
 import com.romulus.mobile.source.SourceFacade
+import com.romulus.mobile.source.browse.ArchiveContainerPreparationService
 import kotlinx.coroutines.Dispatchers
 
 data class AppGraph(
@@ -32,14 +33,22 @@ data class AppGraph(
         fun create(application: Application): AppGraph {
             val diagnosticsFacade = DiagnosticsFacade()
             val realDebridFacade = RealDebridFacade.create(application)
-            val remoteZipFacade = RemoteZipFacade()
+            val remoteZipFacade = RemoteZipFacade.create()
+            val archiveContainerPreparationService = ArchiveContainerPreparationService.create(
+                application = application,
+                realDebridFacade = realDebridFacade,
+                remoteZipFacade = remoteZipFacade
+            )
             val sourceFacade = SourceFacade.create(
                 application = application,
-                realDebridFacade = realDebridFacade
+                realDebridFacade = realDebridFacade,
+                archiveContainerPreparationService = archiveContainerPreparationService
             )
             val downloadsFacade = DownloadsFacade.create(
                 application = application,
-                realDebridFacade = realDebridFacade
+                realDebridFacade = realDebridFacade,
+                remoteZipFacade = remoteZipFacade,
+                archiveContainerPreparationService = archiveContainerPreparationService
             )
             val setupStateStore: SetupStateStore = SharedPreferencesSetupStateStore(application)
             val uriGrantRegistry = AndroidUriGrantRegistry(application)

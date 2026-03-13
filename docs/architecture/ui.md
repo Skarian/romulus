@@ -420,6 +420,8 @@ data class FilesRouteArgs(
 data class FilesUiState(
     val entryDisplayName: String,
     val mode: FilesMode,
+    val isResolving: Boolean,
+    val preparing: FilesPreparingState?,
     val rows: List<SelectableRowModel>,
     val selectedIds: Set<SelectableItemId>,
     val preferences: FilePreferencesState,
@@ -438,6 +440,12 @@ data class SelectableRowModel(
     val originalDisplayName: String,
     val sizeLabel: String,
     val partLabel: String?
+)
+
+data class FilesPreparingState(
+    val statusLabel: String?,
+    val progressPercent: Double?,
+    val timeoutAtEpochMillis: Long
 )
 
 class FilesViewModel(

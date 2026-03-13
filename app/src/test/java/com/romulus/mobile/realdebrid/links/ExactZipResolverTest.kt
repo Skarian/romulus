@@ -5,15 +5,15 @@ import com.romulus.mobile.realdebrid.AddedMagnetDto
 import com.romulus.mobile.realdebrid.AvailableHostDto
 import com.romulus.mobile.realdebrid.FakeRealDebridApi
 import com.romulus.mobile.realdebrid.MutableClock
-import com.romulus.mobile.realdebrid.ProviderInventoryRequest
+import com.romulus.mobile.realdebrid.ExactZipRequest
+import com.romulus.mobile.realdebrid.ProviderReadyLink
+import com.romulus.mobile.realdebrid.ProviderResumeMarker
 import com.romulus.mobile.realdebrid.ProviderSourceRef
 import com.romulus.mobile.realdebrid.TorrentFileDto
 import com.romulus.mobile.realdebrid.TorrentInfoDto
 import com.romulus.mobile.realdebrid.UnrestrictedLinkDto
 import com.romulus.mobile.realdebrid.normalizeProviderPath
 import com.romulus.mobile.realdebrid.providerSelectionId
-import com.romulus.mobile.realdebrid.acquisition.ProviderAcquisitionPoller
-import com.romulus.mobile.realdebrid.acquisition.ProviderSelectionService
 import com.romulus.mobile.realdebrid.budget.RequestBudget
 import com.romulus.mobile.realdebrid.inventory.TorrentInventoryService
 import kotlinx.coroutines.test.runTest
@@ -23,11 +23,10 @@ import org.junit.Test
 
 class ExactZipResolverTest {
     @Test
-    fun resolvesExactZipLocatorFromInventoryAndAcquisition() = runTest {
+    fun findsExactZipMatchAndMaterializesArchiveContainer() = runTest {
         val api = FakeRealDebridApi().apply {
             availableHosts = listOf(AvailableHostDto(host = "host-a"))
             enqueueAddedMagnet(AddedMagnetDto(id = "browse-torrent"))
-            enqueueAddedMagnet(AddedMagnetDto(id = "download-torrent"))
             enqueueTorrentInfo(
                 "browse-torrent",
                 TorrentInfoDto(
@@ -39,34 +38,6 @@ class ExactZipResolverTest {
                             bytes = 300L
                         )
                     )
-                )
-            )
-            enqueueTorrentInfo(
-                "download-torrent",
-                TorrentInfoDto(
-                    id = "download-torrent",
-                    status = "queued",
-                    files = listOf(
-                        TorrentFileDto(
-                            id = 22,
-                            path = "Show/archive.zip",
-                            bytes = 300L,
-                            selected = 1
-                        )
-                    )
-                ),
-                TorrentInfoDto(
-                    id = "download-torrent",
-                    status = "downloaded",
-                    files = listOf(
-                        TorrentFileDto(
-                            id = 22,
-                            path = "Show/archive.zip",
-                            bytes = 300L,
-                            selected = 1
-                        )
-                    ),
-                    links = listOf("https://restricted.example/archive")
                 )
             )
             respondUnrestrict(
@@ -81,24 +52,27 @@ class ExactZipResolverTest {
         }
         val budget = RequestBudget(MutableClock())
         val inventoryService = TorrentInventoryService(budget, api)
-        val acquisitionPoller = ProviderAcquisitionPoller(
-            selectionService = ProviderSelectionService(budget, api),
-            budget = budget,
-            api = api
-        )
         val resolver = ExactZipResolver(
             inventoryService = inventoryService,
-            acquisitionPoller = acquisitionPoller,
             budget = budget,
             api = api
         )
 
-        val result = resolver.resolve(
-            com.romulus.mobile.realdebrid.ExactZipRequest(
-                sources = listOf(
-                    ProviderSourceRef("magnet:?xt=urn:btih:source", null)
-                ),
+        val exactMatch = resolver.findMatch(
+            ExactZipRequest(
+                sources = listOf(ProviderSourceRef("magnet:?xt=urn:btih:source", null)),
                 exactPath = "Show/archive.zip"
+            )
+        ).getOrThrow()
+        val result = resolver.materialize(
+            exactMatch = exactMatch,
+            acquisitionStatus = AcquisitionStatus.LinksReady(
+                resumeMarker = ProviderResumeMarker(
+                    torrentId = "download-torrent",
+                    sourceMagnetUri = "magnet:?xt=urn:btih:source",
+                    selectedProviderFileIds = listOf("22")
+                ),
+                readyLinks = listOf(ProviderReadyLink("https://restricted.example/archive"))
             )
         ).getOrThrow()
 
@@ -132,20 +106,13 @@ class ExactZipResolverTest {
         val budget = RequestBudget(MutableClock())
         val resolver = ExactZipResolver(
             inventoryService = TorrentInventoryService(budget, api),
-            acquisitionPoller = ProviderAcquisitionPoller(
-                selectionService = ProviderSelectionService(budget, api),
-                budget = budget,
-                api = api
-            ),
             budget = budget,
             api = api
         )
 
-        val result = resolver.resolve(
-            com.romulus.mobile.realdebrid.ExactZipRequest(
-                sources = listOf(
-                    ProviderSourceRef("magnet:?xt=urn:btih:source", null)
-                ),
+        val result = resolver.findMatch(
+            ExactZipRequest(
+                sources = listOf(ProviderSourceRef("magnet:?xt=urn:btih:source", null)),
                 exactPath = "Show/archive.zip"
             )
         )

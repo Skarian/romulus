@@ -246,13 +246,13 @@ diagnostics/
    - source entry reference,
    - selected item identity,
    - original display name,
-   - output naming intent,
-   - unarchive intent,
-   - recursive-unarchive intent,
-   - storage target context, including output sub-folder context when present,
-   - source-owned execution context needed for retry, restart, or recovery:
-     - torrent-native standard-file selection intent, or
-     - archive-selection outer-container locator plus archive-entry identity.
+     - output naming intent,
+     - unarchive intent,
+     - recursive-unarchive intent,
+     - storage target context, including output sub-folder context when present,
+     - source-owned execution context needed for retry, restart, or recovery:
+       - torrent-native standard-file selection intent, or
+       - archive-selection preparation key plus archive-entry identity.
 4. Execution, retry, restart, and recovery keep that queue binding and never rebind a task to a newer active snapshot.
 5. `ui/downloads` reads durable queue state from `downloads/queue`, not from reconstructed screen-local state.
 6. `ui/downloads` and `ui/settings` never infer active work from local UI memory; they read queue authority instead.
@@ -275,7 +275,7 @@ diagnostics/
 ### 8.7 Archive-Selection Download Execution
 
 1. `downloads/work` asks `downloads/queue` for runnable, queue-claimed archive-entry tasks only.
-2. `downloads/attempts` refreshes the exact outer ZIP URL through `realdebrid/`.
+2. `downloads/attempts` resolves the shared archive-preparation record to a ready outer ZIP URL before copy begins.
 3. `downloads/attempts` reopens the selected internal entry through `remotezip/` using duplicate-safe stable entry identity, never filename or path alone.
 4. `downloads/output` creates `OutputReservation` for the selected entry before any local artifact write begins.
 5. During selected-entry copy, `downloads/attempts` emits local-transfer checkpoint updates at least every 3 seconds and again on pause, cancel, failure, and completion; `downloads/queue` persists those updates into `DownloadLedgerStore`.

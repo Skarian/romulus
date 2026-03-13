@@ -3,6 +3,7 @@ package com.romulus.mobile.source
 import android.app.Application
 import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.source.browse.ArchiveBrowseBuilder
+import com.romulus.mobile.source.browse.ArchiveContainerPreparationService
 import com.romulus.mobile.source.browse.BrowseFailure
 import com.romulus.mobile.source.browse.BrowseRequest
 import com.romulus.mobile.source.browse.BrowseResult
@@ -71,7 +72,12 @@ class SourceFacade internal constructor(
         )
 
     companion object {
-        fun create(application: Application, realDebridFacade: RealDebridFacade): SourceFacade {
+        @Suppress("LongMethod")
+        internal fun create(
+            application: Application,
+            realDebridFacade: RealDebridFacade,
+            archiveContainerPreparationService: ArchiveContainerPreparationService
+        ): SourceFacade {
             val json = Json {
                 ignoreUnknownKeys = true
                 encodeDefaults = true
@@ -127,7 +133,9 @@ class SourceFacade internal constructor(
                     standardBrowseBuilder = StandardBrowseBuilder(
                         enumerateTorrentMetadata = standardBrowseInventoryService::load
                     ),
-                    archiveBrowseBuilder = ArchiveBrowseBuilder()
+                    archiveBrowseBuilder = ArchiveBrowseBuilder(
+                        loadArchiveBrowse = archiveContainerPreparationService::loadForBrowse
+                    )
                 )
             )
         }

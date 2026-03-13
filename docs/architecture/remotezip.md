@@ -149,7 +149,8 @@ data class RangeReadResult(
     val statusCode: Int,
     val contentRange: String?,
     val body: ByteArray,
-    val contentLength: Long?
+    val contentLength: Long?,
+    val acceptsRanges: Boolean
 )
 
 interface HttpRangeReader {
@@ -266,7 +267,7 @@ class RemoteZipSeekableChannel(
 - Internal area: `remotezip/copy`
 - Purpose: copy only one selected archive entry by stable identity.
 - Responsibility: rematch the requested identity against the remote ZIP metadata before copying, then stream only the remaining selected entry bytes starting at the caller-provided resume offset.
-- Depends on: `RangeProbeService`, `RemoteZipEnumerator`, `HttpRangeReader`
+- Depends on: `RangeProbeService`, `RemoteZipSeekableChannel`
 - Must not depend on: final output policy or queue state
 - Visibility: `internal`
 - Key types/functions:
@@ -274,13 +275,12 @@ class RemoteZipSeekableChannel(
 ```kotlin
 class SelectedEntryCopier(
     private val probeService: RangeProbeService,
-    private val enumerator: RemoteZipEnumerator,
-    private val rangeReader: HttpRangeReader
+    private val seekableChannelFactory: (RemoteZipProbe) -> RemoteZipSeekableChannel
 ) {
     suspend fun copy(request: CopySelectedEntryRequest): Result<Unit> {
         // Contract:
         // - probe the archive URL
-        // - enumerate metadata
+        // - reopen the archive through the shared metadata-first session
         // - rematch by ArchiveEntryIdentity, not by filename
         // - if resumeByteOffset > 0, append only the remaining bytes after that offset
         // - fail explicitly if the entry no longer matches the saved identity or is shorter than the saved offset
@@ -299,7 +299,7 @@ class SelectedEntryCopier(
 
 2. Selected-entry copy:
    - `downloads/attempts` passes `ArchiveEntryIdentity` captured at enqueue time.
-   - `SelectedEntryCopier` reprobes and re-enumerates the archive.
+   - `SelectedEntryCopier` reprobes and reopens the archive through the same metadata-first session logic used by enumeration.
    - It rematches the selected entry by stable identity.
    - It resumes from the saved offset when a transfer checkpoint already exists.
    - It streams only that entry to the reserved artifact path.
@@ -314,37 +314,14 @@ class SelectedEntryCopier(
 
 ## Testing Plan
 
-### `RangeProbeServiceTest.kt`
+### `RemoteZipServicesTest.kt`
 
 - Scope: unit
 - Covers:
   - valid range-support probe
-  - missing or invalid `Content-Range` rejection
-  - content-length mismatch rejection
-- Fixtures:
-  - fake `HttpRangeReader`
-
-### `RemoteZipEnumeratorTest.kt`
-
-- Scope: unit
-- Covers:
-  - metadata-first enumeration
+  - missing range-advertisement rejection
   - duplicate filename identity safety
-  - alphabetical descriptor ordering delegated to caller, not silently applied here
-  - enumeration failure on invalid ZIP metadata
-- Fixtures:
-  - fake `HttpRangeReader`
-  - ZIP fixtures served from byte arrays
-
-### `SelectedEntryCopierTest.kt`
-
-- Scope: unit
-- Covers:
-  - identity rematch before copy
-  - selected-entry-only copy
   - resume continues from the saved byte offset
-  - failure when the requested identity no longer matches
-  - progress callback invocation
 - Fixtures:
   - fake `HttpRangeReader`
   - ZIP fixtures

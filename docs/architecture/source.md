@@ -62,7 +62,7 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
   - `ui/home` for home-state observation and refresh.
   - `ui/files` for browse requests.
 - Outbound dependencies:
-  - `realdebrid/` for standard browse cache fills and exact `.zip` container resolution during archive-selection mode.
+- `realdebrid/` for standard browse cache fills, exact `.zip` file matching, and resumable outer-container preparation during archive-selection mode.
   - `remotezip/` for remote ZIP enumeration.
   - `diagnostics/` for accept, refresh, and browse events.
 - What may cross the root-package boundary:
@@ -698,16 +698,15 @@ interface StandardBrowseInventoryCacheStore {
 ### `ArchiveBrowseBuilder.kt`
 - Internal area: `source/browse`
 - Purpose: build archive-selection rows for exact `.zip` paths.
-- Responsibility: resolve the outer `.zip`, enumerate internal entries remotely, apply ignore rules, preserve duplicate-safe archive-entry identity, and sort rows alphabetically by internal file name before they reach `ui/files`.
-- Depends on: `RealDebridFacade`, `RemoteZipFacade`
+- Responsibility: map the cached archive-browse service result into either archive-preparing UI state or ready archive-entry rows, apply ignore rules, preserve duplicate-safe archive-entry identity, and sort rows alphabetically by internal file name before they reach `ui/files`.
+- Depends on: `CachedArchiveBrowseService`
 - Must not depend on: queue services, output services, full-download fallback logic
 - Visibility: `internal`
 - Key types/functions:
 
 ```kotlin
 class ArchiveBrowseBuilder(
-    private val realDebridFacade: RealDebridFacade,
-    private val remoteZipFacade: RemoteZipFacade
+    private val loadArchiveBrowse: suspend (SnapshotId, SourceSnapshotEntry) -> Result<ArchiveBrowseLoadResult>
 ) {
     suspend fun build(snapshotId: SnapshotId, entry: SourceSnapshotEntry): BrowseResult
 }
@@ -770,7 +769,7 @@ sealed interface SelectableItem {
         override val sizeBytes: Long?,
         override val selectionPolicy: SelectionPolicy,
         override val sourceContext: SelectableItemSourceContext,
-        val outerZip: ArchiveContainerLocator,
+        val preparationKey: ArchivePreparationKey,
         val archiveEntryIdentity: ArchiveEntryIdentity
     ) : SelectableItem
 }
@@ -810,8 +809,11 @@ sealed interface BrowseFailure {
 
 4. Archive-selection browse:
    - `BrowseService` detects exact `.zip` path mode.
-   - `ArchiveBrowseBuilder` resolves the outer `.zip` URL through `realdebrid/`.
-   - `remotezip/` enumerates internal entries remotely.
+   - `ArchiveBrowseBuilder` asks the shared archive-container preparation service for that snapshot entry.
+   - On first open, `source/` finds the exact outer `.zip` through `realdebrid/`, starts provider preparation for that one container, and persists the matched file plus resume marker locally.
+   - While the outer `.zip` is still preparing, Files stays in archive-preparing state and revisits resume that same provider acquisition instead of adding the magnet again.
+   - Once provider links are ready, the preparation service resolves one unrestricted outer-container URL, enumerates internal entries through `remotezip/`, and caches the ready result locally for that snapshot entry.
+   - Ready archive-entry rows carry a shared preparation key rather than their own outer-container locator so later downloads reuse the same outer-ZIP acquisition.
    - Ignore rules apply before rows reach the UI.
    - Returned rows are sorted alphabetically by internal file name.
    - Failure stays in archive-selection failure state and never falls back to standard browse.

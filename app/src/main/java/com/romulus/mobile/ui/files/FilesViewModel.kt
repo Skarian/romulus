@@ -21,6 +21,8 @@ import com.romulus.mobile.source.browse.SelectableItem
 import com.romulus.mobile.source.browse.SelectableItemId
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +40,7 @@ data class FilesUiState(
     val entryDisplayName: String,
     val mode: FilesMode,
     val isResolving: Boolean,
+    val preparing: FilesPreparingState?,
     val rows: List<SelectableRowModel>,
     val selectedIds: Set<SelectableItemId>,
     val preferences: FilePreferencesState,
@@ -59,6 +62,12 @@ data class SelectableRowModel(
     val providerFileId: String?
 )
 
+data class FilesPreparingState(
+    val statusLabel: String?,
+    val progressPercent: Double?,
+    val timeoutAtEpochMillis: Long
+)
+
 class FilesViewModel(
     private val routeArgs: FilesRouteArgs,
     private val sourceFacade: SourceFacade,
@@ -73,15 +82,25 @@ class FilesViewModel(
         val listAnchor: Int
     )
 
+    private data class FilesResolvedState(
+        val entryDisplayName: String,
+        val mode: FilesMode,
+        val isResolving: Boolean,
+        val preparing: FilesPreparingState?,
+        val items: List<SelectableItem>
+    )
+
     private val resolvedItems = MutableStateFlow<List<SelectableItem>>(emptyList())
     private val entryDisplayName = MutableStateFlow(routeArgs.entryDisplayName)
     private val mode = MutableStateFlow(FilesMode.STANDARD)
     private val isResolving = MutableStateFlow(false)
+    private val preparing = MutableStateFlow<FilesPreparingState?>(null)
     private val selectedIds = MutableStateFlow<Set<SelectableItemId>>(emptySet())
     private val preferences = MutableStateFlow(FilePreferencesState.disabled())
     private val searchQuery = MutableStateFlow("")
     private val resolverError = MutableStateFlow<String?>(null)
     private val listAnchor = MutableStateFlow(0)
+    private var preparingPollJob: Job? = null
 
     private val localState = combine(
         selectedIds,
@@ -99,19 +118,35 @@ class FilesViewModel(
         )
     }
 
-    val state: StateFlow<FilesUiState> = combine(
+    private val resolvedState = combine(
         entryDisplayName,
         mode,
         isResolving,
-        resolvedItems,
-        localState
-    ) { currentEntryDisplayName, browseMode, resolving, items, local ->
-        buildState(
+        preparing,
+        resolvedItems
+    ) { currentEntryDisplayName, browseMode, resolving, preparingState, items ->
+        FilesResolvedState(
             entryDisplayName = currentEntryDisplayName,
-            browseMode = browseMode,
+            mode = browseMode,
             isResolving = resolving,
-            items = items,
-            selectedIds = local.selectedIds.intersect(items.map { it.itemId }.toSet()),
+            preparing = preparingState,
+            items = items
+        )
+    }
+
+    val state: StateFlow<FilesUiState> = combine(
+        resolvedState,
+        localState
+    ) { resolved, local ->
+        buildState(
+            entryDisplayName = resolved.entryDisplayName,
+            browseMode = resolved.mode,
+            isResolving = resolved.isResolving,
+            preparing = resolved.preparing,
+            items = resolved.items,
+            selectedIds = local.selectedIds.intersect(
+                resolved.items.map { item -> item.itemId }.toSet()
+            ),
             filePreferences = local.preferences,
             searchQuery = local.searchQuery,
             resolverError = local.resolverError,
@@ -124,6 +159,7 @@ class FilesViewModel(
             entryDisplayName = entryDisplayName.value,
             browseMode = mode.value,
             isResolving = isResolving.value,
+            preparing = preparing.value,
             items = resolvedItems.value,
             selectedIds = selectedIds.value,
             filePreferences = preferences.value,
@@ -138,7 +174,9 @@ class FilesViewModel(
         retryResolve()
     }
 
+    @Suppress("LongMethod")
     fun retryResolve() {
+        preparingPollJob?.cancel()
         isResolving.value = true
         resolverError.value = null
         viewModelScope.launch {
@@ -152,16 +190,16 @@ class FilesViewModel(
             ) {
                 is BrowseResult.Loaded -> {
                     resolvedItems.value = result.items
-                    entryDisplayName.value = result.items.firstOrNull()
-                        ?.sourceContext
-                        ?.entryDisplayName
+                    val firstItem = result.items.firstOrNull()
+                    entryDisplayName.value = firstItem?.sourceContext?.entryDisplayName
                         ?: routeArgs.entryDisplayName
                     mode.value = when (result.mode) {
                         BrowseMode.STANDARD -> FilesMode.STANDARD
                         BrowseMode.ARCHIVE_SELECTION -> FilesMode.ARCHIVE_SELECTION
                     }
+                    preparing.value = null
                     selectedIds.value = emptySet()
-                    val selectionPolicy = result.items.firstOrNull()?.selectionPolicy
+                    val selectionPolicy = firstItem?.selectionPolicy
                     preferences.value =
                         selectionPolicy?.let(FilePreferencesState::fromSelectionPolicy)
                             ?: FilePreferencesState.disabled()
@@ -169,10 +207,34 @@ class FilesViewModel(
                     isResolving.value = false
                 }
 
+                is BrowseResult.Preparing -> {
+                    resolvedItems.value = emptyList()
+                    entryDisplayName.value = routeArgs.entryDisplayName
+                    mode.value = when (result.mode) {
+                        BrowseMode.STANDARD -> FilesMode.STANDARD
+                        BrowseMode.ARCHIVE_SELECTION -> FilesMode.ARCHIVE_SELECTION
+                    }
+                    preparing.value = FilesPreparingState(
+                        statusLabel = result.statusLabel,
+                        progressPercent = result.progressPercent,
+                        timeoutAtEpochMillis = result.timeoutAtEpochMillis
+                    )
+                    selectedIds.value = emptySet()
+                    preferences.value = FilePreferencesState.disabled()
+                    resolverError.value = null
+                    isResolving.value = false
+                    preparingPollJob = viewModelScope.launch {
+                        delay(PREPARING_POLL_INTERVAL_MILLIS)
+                        preparingPollJob = null
+                        retryResolve()
+                    }
+                }
+
                 is BrowseResult.Failed -> {
                     resolvedItems.value = emptyList()
                     entryDisplayName.value = routeArgs.entryDisplayName
                     mode.value = FilesMode.STANDARD
+                    preparing.value = null
                     selectedIds.value = emptySet()
                     preferences.value = FilePreferencesState.disabled()
                     resolverError.value = result.failure.toMessage()
@@ -224,10 +286,12 @@ class FilesViewModel(
         return downloadsFacade.enqueue(inputs)
     }
 
+    @Suppress("LongParameterList")
     private fun buildState(
         entryDisplayName: String,
         browseMode: FilesMode,
         isResolving: Boolean,
+        preparing: FilesPreparingState?,
         items: List<SelectableItem>,
         selectedIds: Set<SelectableItemId>,
         filePreferences: FilePreferencesState,
@@ -246,6 +310,7 @@ class FilesViewModel(
             entryDisplayName = entryDisplayName,
             mode = browseMode,
             isResolving = isResolving,
+            preparing = preparing,
             rows = rows,
             selectedIds = selectedIds,
             preferences = filePreferences.normalized(),
@@ -311,13 +376,19 @@ class FilesViewModel(
                 )
 
                 is SelectableItem.ArchiveEntry -> QueueExecutionContext.ArchiveEntry(
-                    outerZip = outerZip,
+                    preparationKey = preparationKey,
                     archiveEntryIdentity = archiveEntryIdentity
                 )
             }
         )
 
+    override fun onCleared() {
+        preparingPollJob?.cancel()
+        super.onCleared()
+    }
+
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+        const val PREPARING_POLL_INTERVAL_MILLIS = 2_000L
     }
 }

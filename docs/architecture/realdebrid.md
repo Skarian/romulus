@@ -82,9 +82,11 @@ This package stays moderately concrete because spike evidence locked the executi
 - `RealDebridFacade.readTokenReadiness(): TokenReadiness`
 - `RealDebridFacade.saveValidatedToken(candidate: String): TokenSaveResult`
 - `RealDebridFacade.startAcquisition(request: ProviderSelectionRequest): Result<AcquisitionStatus>`
+- `RealDebridFacade.startAcquisition(locator: ProviderLocator): Result<AcquisitionStatus>`
 - `RealDebridFacade.resumeAcquisition(marker: ProviderResumeMarker): Result<AcquisitionStatus>`
 - `RealDebridFacade.resolveReadyLink(link: ProviderReadyLink): Result<ResolvedDownloadUnit>`
-- `RealDebridFacade.resolveExactZip(request: ExactZipRequest): Result<ArchiveContainerLocator>`
+- `RealDebridFacade.findExactZipMatch(request: ExactZipRequest): Result<ProviderFileRecord>`
+- `RealDebridFacade.materializeArchiveContainer(exactMatch: ProviderFileRecord, acquisitionStatus: AcquisitionStatus.LinksReady): Result<ArchiveContainerLocator>`
 
 ## Internal Structure
 
@@ -214,7 +216,11 @@ class RealDebridFacade(
     suspend fun startAcquisition(request: ProviderSelectionRequest): Result<AcquisitionStatus>
     suspend fun resumeAcquisition(marker: ProviderResumeMarker): Result<AcquisitionStatus>
     suspend fun resolveReadyLink(link: ProviderReadyLink): Result<ResolvedDownloadUnit>
-    suspend fun resolveExactZip(request: ExactZipRequest): Result<ArchiveContainerLocator>
+    suspend fun findExactZipMatch(request: ExactZipRequest): Result<ProviderFileRecord>
+    suspend fun materializeArchiveContainer(
+        exactMatch: ProviderFileRecord,
+        acquisitionStatus: AcquisitionStatus.LinksReady
+    ): Result<ArchiveContainerLocator>
 }
 ```
 
@@ -457,8 +463,8 @@ class UnrestrictedLinkResolver(
 
 ### `ExactZipResolver.kt`
 - Internal area: `realdebrid/links`
-- Purpose: resolve the exact provider file that backs archive-selection mode.
-- Responsibility: reuse inventory and acquisition stages, then return an outer `.zip` locator without enumerating the archive itself.
+- Purpose: support exact `.zip` archive-selection matching and ready-container materialization.
+- Responsibility: find the exact provider file that backs archive-selection mode and turn a ready provider acquisition result into an unrestricted outer `.zip` locator without enumerating the archive itself.
 - Depends on: `TorrentInventoryService`, `ProviderAcquisitionPoller`, `RequestBudget`, `RealDebridApi`
 - Must not depend on: `remotezip/`
 - Visibility: `internal`
@@ -471,7 +477,11 @@ class ExactZipResolver(
     private val budget: RequestBudget,
     private val api: RealDebridApi
 ) {
-    suspend fun resolve(request: ExactZipRequest): Result<ArchiveContainerLocator>
+    suspend fun findMatch(request: ExactZipRequest): Result<ProviderFileRecord>
+    suspend fun materialize(
+        exactMatch: ProviderFileRecord,
+        acquisitionStatus: AcquisitionStatus.LinksReady
+    ): Result<ArchiveContainerLocator>
 }
 ```
 
@@ -496,8 +506,16 @@ class ExactZipResolver(
 
 4. Exact `.zip` resolution:
    - `source/` requests `ExactZipRequest`.
-   - `ExactZipResolver` enumerates provider files, finds the exact matching `.zip`, runs acquisition if needed, and returns `ArchiveContainerLocator`.
+   - `ExactZipResolver` enumerates provider files and finds the exact matching outer `.zip`.
+   - `source/` persists the matched file plus the provider-acquisition resume marker while the container is still preparing and retains that shared preparation record after the container becomes ready.
+   - Later revisits call `resumeAcquisition(...)` on that same saved marker instead of starting a new provider torrent.
+   - Once provider links are ready, `ExactZipResolver` materializes one unrestricted outer-container URL.
    - `remotezip/` later enumerates or copies the archive; `realdebrid/` stops at providing the container URL and locator.
+
+5. Archive-entry execution refresh:
+   - `downloads/attempts` asks the shared source-owned archive-preparation service for the ready outer container using the queue-stored preparation key.
+   - That service resumes the saved provider marker for the exact outer archive instead of starting a new provider torrent when the existing acquisition is still valid.
+   - `remotezip/` reopens the archive from the refreshed URL and copies only the selected internal entry.
 
 ## Failure and Recovery Rules
 
@@ -588,7 +606,6 @@ class ExactZipResolver(
   - exact-path-not-found failure
 - Fixtures:
   - fake `TorrentInventoryService`
-  - fake `ProviderAcquisitionPoller`
   - fake `RealDebridApi`
 
 ## Open Questions or Deferred Decisions

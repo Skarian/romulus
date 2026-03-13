@@ -507,7 +507,7 @@ internal class StandardAttemptRunner(
     }
 }
 
-private class QueueFinalizationControl(
+internal class QueueFinalizationControl(
     private val taskId: com.romulus.mobile.downloads.queue.TaskId,
     private val controlHandle: ControlHandle,
     private val queueService: QueueService,
@@ -531,9 +531,9 @@ private class QueueFinalizationControl(
     }
 }
 
-private val FINALIZATION_LEASE_RENEW_INTERVAL: Duration = Duration.ofSeconds(30)
+internal val FINALIZATION_LEASE_RENEW_INTERVAL: Duration = Duration.ofSeconds(30)
 
-private fun Throwable.toReservationFailure(): FailureReason {
+internal fun Throwable.toReservationFailure(): FailureReason {
     val message = message ?: "Download directory is not usable"
     return if (
         message.contains("directory", ignoreCase = true) ||
@@ -546,7 +546,7 @@ private fun Throwable.toReservationFailure(): FailureReason {
     }
 }
 
-private class QueueStatePersistenceException(message: String, cause: Throwable) :
+internal class QueueStatePersistenceException(message: String, cause: Throwable) :
     IllegalStateException(message, cause)
 
 private class ProviderPreparationTimeoutException(message: String) : IllegalStateException(message)

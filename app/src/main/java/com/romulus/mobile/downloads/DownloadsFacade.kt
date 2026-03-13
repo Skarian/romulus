@@ -10,7 +10,9 @@ package com.romulus.mobile.downloads
 
 import android.app.Application
 import com.romulus.mobile.downloads.attempts.ArchiveEntryAttemptRunner
+import com.romulus.mobile.downloads.attempts.FacadeRemoteZipCopyGateway
 import com.romulus.mobile.downloads.attempts.OkHttpDownloadTransport
+import com.romulus.mobile.downloads.attempts.SharedArchiveContainerGateway
 import com.romulus.mobile.downloads.attempts.RealDebridProviderRuntimeGateway
 import com.romulus.mobile.downloads.attempts.StandardAttemptRunner
 import com.romulus.mobile.downloads.config.AndroidOutputDirectoryAccess
@@ -45,6 +47,8 @@ import com.romulus.mobile.downloads.work.WorkManagerWorkerLauncher
 import com.romulus.mobile.downloads.work.WorkScheduler
 import com.romulus.mobile.downloads.work.WorkWakeReason
 import com.romulus.mobile.realdebrid.RealDebridFacade
+import com.romulus.mobile.remotezip.RemoteZipFacade
+import com.romulus.mobile.source.browse.ArchiveContainerPreparationService
 import java.io.File
 import java.time.Clock
 import kotlinx.coroutines.Dispatchers
@@ -150,7 +154,12 @@ class DownloadsFacade internal constructor(
 
     companion object {
         @Suppress("InjectDispatcher", "LongMethod")
-        fun create(application: Application, realDebridFacade: RealDebridFacade): DownloadsFacade {
+        internal fun create(
+            application: Application,
+            realDebridFacade: RealDebridFacade,
+            remoteZipFacade: RemoteZipFacade,
+            archiveContainerPreparationService: ArchiveContainerPreparationService
+        ): DownloadsFacade {
             val clock = Clock.systemUTC()
             val json = Json {
                 encodeDefaults = true
@@ -231,7 +240,23 @@ class DownloadsFacade internal constructor(
                     queueService = queueService,
                     clock = clock
                 ),
-                archiveEntryAttemptRunner = ArchiveEntryAttemptRunner(),
+                archiveEntryAttemptRunner = ArchiveEntryAttemptRunner(
+                    archiveContainerGateway = SharedArchiveContainerGateway(
+                        archiveContainerPreparationService
+                    ),
+                    remoteZipCopyGateway = FacadeRemoteZipCopyGateway(remoteZipFacade),
+                    outputReservationService = outputReservationService,
+                    outputFinalizer = OutputFinalizer(
+                        reservationService = outputReservationService,
+                        extractionController = ArchiveExtractionController(
+                            archiveRuntime = SevenZipArchiveRuntime(),
+                            outputFilesystem = outputFilesystem
+                        ),
+                        outputFilesystem = outputFilesystem
+                    ),
+                    queueService = queueService,
+                    clock = clock
+                ),
                 clock = clock
             )
             return DownloadsFacade(

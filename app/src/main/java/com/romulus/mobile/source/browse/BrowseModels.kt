@@ -1,6 +1,5 @@
 package com.romulus.mobile.source.browse
 
-import com.romulus.mobile.realdebrid.ArchiveContainerLocator
 import com.romulus.mobile.remotezip.ArchiveEntryIdentity
 import com.romulus.mobile.source.ingest.RenameRule
 import com.romulus.mobile.source.snapshot.SnapshotId
@@ -56,7 +55,7 @@ sealed interface SelectableItem {
         override val sizeBytes: Long?,
         override val selectionPolicy: SelectionPolicy,
         override val sourceContext: SelectableItemSourceContext,
-        val outerZip: ArchiveContainerLocator,
+        val preparationKey: ArchivePreparationKey,
         val archiveEntryIdentity: ArchiveEntryIdentity
     ) : SelectableItem
 }
@@ -65,6 +64,13 @@ data class BrowseRequest(val snapshotId: SnapshotId, val entryId: SourceEntryId)
 
 sealed interface BrowseResult {
     data class Loaded(val mode: BrowseMode, val items: List<SelectableItem>) : BrowseResult
+
+    data class Preparing(
+        val mode: BrowseMode,
+        val statusLabel: String?,
+        val progressPercent: Double?,
+        val timeoutAtEpochMillis: Long
+    ) : BrowseResult
 
     data class Failed(val failure: BrowseFailure) : BrowseResult
 }

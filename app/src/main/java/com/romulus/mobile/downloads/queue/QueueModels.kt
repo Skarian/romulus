@@ -5,10 +5,10 @@ import com.romulus.mobile.downloads.output.FinalOutputRecord
 import com.romulus.mobile.downloads.output.OutputCleanupScope
 import com.romulus.mobile.downloads.output.OutputReservation
 import com.romulus.mobile.downloads.output.TempFileToken
-import com.romulus.mobile.realdebrid.ArchiveContainerLocator
 import com.romulus.mobile.realdebrid.ProviderResumeMarker
 import com.romulus.mobile.remotezip.ArchiveEntryIdentity
 import com.romulus.mobile.source.InstantAsEpochMilliSerializer
+import com.romulus.mobile.source.browse.ArchivePreparationKey
 import com.romulus.mobile.source.browse.SelectableItemId
 import com.romulus.mobile.source.ingest.RenameRule
 import com.romulus.mobile.source.snapshot.SnapshotId
@@ -41,7 +41,7 @@ sealed interface QueueExecutionContext {
 
     @Serializable
     data class ArchiveEntry(
-        val outerZip: ArchiveContainerLocator,
+        val preparationKey: ArchivePreparationKey,
         val archiveEntryIdentity: ArchiveEntryIdentity
     ) : QueueExecutionContext
 }

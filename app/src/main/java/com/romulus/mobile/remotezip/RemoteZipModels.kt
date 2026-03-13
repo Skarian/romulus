@@ -12,14 +12,17 @@ data class ArchiveEntryIdentity(
     val normalizedPath: String
 )
 
+@Serializable
 data class ArchiveEntryDescriptor(
     val identity: ArchiveEntryIdentity,
     val entryPath: String,
     val sizeBytes: Long
 )
 
+@Serializable
 data class EnumerateRemoteZipRequest(val archiveUrl: String)
 
+@Serializable
 data class EnumeratedRemoteZip(val entries: List<ArchiveEntryDescriptor>)
 
 data class CopySelectedEntryRequest(
