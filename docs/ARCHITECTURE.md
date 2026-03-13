@@ -289,6 +289,7 @@ diagnostics/
    - output-name reservation,
    - bound output-root identity for one reservation,
    - temp-file placement,
+   - temp-artifact type preservation for local unarchive,
    - collision suffixing,
    - local unarchive decision,
    - recursive pass control,

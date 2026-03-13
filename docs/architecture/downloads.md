@@ -838,7 +838,7 @@ class OutputRootResolver(
 ### `OutputReservationService.kt`
 - Internal area: `downloads/output`
 - Purpose: reserve deterministic output identity before writes begin.
-- Responsibility: choose direct-save targets early by applying the queue row's `NamingIntent` before collision handling, reserve extraction roots early, and reserve extraction manifests before extraction writes final files.
+- Responsibility: choose direct-save targets early by applying the queue row's `NamingIntent` before collision handling, reserve extraction roots early, preserve the source artifact extension on temp artifacts so local unarchive can reopen the completed file by type, and reserve extraction manifests before extraction writes final files.
 - Depends on: `OutputFilesystem`, `OutputRootResolver`, `Clock`
 - Must not depend on: queue-state mutation
 - Visibility: `internal`

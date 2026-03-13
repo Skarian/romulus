@@ -71,7 +71,9 @@ internal class OutputReservationService(
         occupiedRelativePaths: Set<String>
     ): OutputReservation {
         val reservationId = ReservationId(UUID.randomUUID().toString())
-        val tempArtifact = artifactRoot.resolve("artifacts/${reservationId.value}.part")
+        val tempArtifact = artifactRoot.resolve(
+            "artifacts/${buildTempArtifactFileName(task.originalDisplayName, reservationId.value)}"
+        )
         val extractionRoot = artifactRoot.resolve("extract/${reservationId.value}")
         val handling = task.reservedArtifactHandling()
         tempArtifact.parentFile?.mkdirs()
@@ -253,4 +255,15 @@ internal class OutputReservationService(
         } else {
             ReservedArtifactHandling.DIRECT_SAVE
         }
+}
+
+private fun buildTempArtifactFileName(originalDisplayName: String, reservationId: String): String {
+    val extension = originalDisplayName.substringAfterLast('.', "")
+        .lowercase()
+        .filter(Char::isLetterOrDigit)
+    return if (extension.isBlank()) {
+        "$reservationId.part"
+    } else {
+        "$reservationId.part.$extension"
+    }
 }

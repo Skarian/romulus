@@ -81,6 +81,41 @@ class OutputReservationServiceTest {
     }
 
     @Test
+    fun reserveKeepsArchiveExtensionOnTempArtifactForLocalUnarchive() = runTest {
+        val rootDirectory = createTempDirectory("downloads-output").toFile()
+        val outputFilesystem = FakeOutputFilesystem(rootDirectory)
+        val service = OutputReservationService(
+            outputFilesystem = outputFilesystem,
+            outputRootResolver = OutputRootResolver(
+                settingsService = DownloadSettingsService.create(
+                    store = FakeDownloadSettingsStore().apply {
+                        persistedState = DownloadSettingsState(
+                            outputDirectoryUri = "content://downloads/tree",
+                            maxConcurrency = 1
+                        )
+                    },
+                    outputAccess = FakeOutputDirectoryAccess(
+                        usableUris = setOf("content://downloads/tree")
+                    )
+                ),
+                clock = testClock()
+            ),
+            artifactRoot = rootDirectory.resolve("runtime")
+        )
+
+        val reservation = service.reserve(
+            sampleQueueTask(
+                name = "Archive.zip",
+                unarchiveIntent = true,
+                recursiveUnarchiveIntent = false
+            )
+        ).getOrThrow()
+
+        assertEquals("zip", reservation.tempArtifactPath.substringAfterLast('.'))
+        assertTrue(reservation.tempArtifactPath.contains(".part."))
+    }
+
+    @Test
     fun inspectRecoveryDispositionUsesPersistedArtifactLengthForTransferResume() = runTest {
         val rootDirectory = createTempDirectory("downloads-output").toFile()
         val service = OutputReservationService(
