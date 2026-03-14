@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -193,7 +194,7 @@ fun FilesScreen(
                 }
             }
 
-            if (state.preparing == null) {
+            if (state.preparing == null && state.rows.isNotEmpty()) {
                 TableHeaderRow {
                     Text(
                         text = "File",
@@ -240,9 +241,24 @@ fun FilesScreen(
                         .weight(1f)
                 )
             } else if (state.isResolving) {
-                Text("Loading files...")
+                FilesStateCard(
+                    title = "Loading files",
+                    body = "Finding available files",
+                    footer = "This usually only takes a moment",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    CircularProgressIndicator()
+                }
             } else if (state.rows.isEmpty() && state.resolverError == null) {
-                Text("No files available")
+                FilesStateCard(
+                    title = "No files available",
+                    body = "There are no files to show for this source.",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
@@ -432,51 +448,74 @@ fun FilesScreen(
 
 @Composable
 private fun ArchivePreparingCard(preparing: FilesPreparingState, modifier: Modifier = Modifier) {
+    FilesStateCard(
+        title = "Getting files ready",
+        body = "Acquiring files on Real-Debrid servers for you",
+        footer = "You can leave this screen and come back later. It may take a while.",
+        modifier = modifier
+    ) {
+        CircularProgressIndicator()
+        preparing.progressPercent?.let { progressPercent ->
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LinearProgressIndicator(
+                    progress = { (progressPercent / 100.0).toFloat().coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = "Progress: ${progressPercent.toInt()}%",
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilesStateCard(
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier,
+    footer: String? = null,
+    content: @Composable ColumnScope.() -> Unit = {}
+) {
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        Card(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 460.dp)
+                .widthIn(max = 460.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 1.dp
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                CircularProgressIndicator()
+                content()
                 Text(
-                    text = "Getting files ready",
+                    text = title,
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = "Acquiring files on Real-Debrid servers for you",
+                    text = body,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                preparing.progressPercent?.let { progressPercent ->
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        LinearProgressIndicator(
-                            progress = { (progressPercent / 100.0).toFloat().coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Text(
-                            text = "Progress: ${progressPercent.toInt()}%",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
+                footer?.let { footerText ->
+                    Text(
+                        text = footerText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Text(
-                    text = "You can leave this screen and come back later. It may take a while.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }

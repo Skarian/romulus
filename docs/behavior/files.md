@@ -6,7 +6,7 @@
 
 ## Expected Result
 
-1. On page open, app shows resolving or loading state until file resolution finishes or enters archive preparation.
+1. On page open, app shows a centered loading state with plain-language copy until file resolution finishes or enters archive preparation.
 2. Files page chooses one resolution mode from entry `scope`:
    - standard mode for directory or root scope,
    - archive-selection mode for an exact `.zip` `scope.path`, as defined in [`archive-selection.md`](archive-selection.md).
@@ -38,7 +38,7 @@
 13. Search is case-insensitive and matches original file name only.
 14. Empty search query shows all files.
 15. While archive-selection is waiting for the outer `.zip` to finish preparing in Real-Debrid, Files shows archive-preparation status and does not show `No files available`.
-16. If resolution succeeds but zero rows are visible after path, ignore, archive-selection, and search filtering, Files shows `No files available` empty state.
+16. If resolution succeeds but zero rows are visible after path, ignore, archive-selection, and search filtering, Files shows a centered `No files available` empty state.
 17. Files page provides a `File preferences` dialog.
 18. `Apply rename` appears inside `File preferences` only when `entries[i].rename` exists with valid `pattern` and `replacement` fields.
 19. When shown, `Apply rename` initial toggle state is enabled.
