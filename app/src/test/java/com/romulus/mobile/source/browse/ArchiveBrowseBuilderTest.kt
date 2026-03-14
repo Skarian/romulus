@@ -10,6 +10,7 @@ import com.romulus.mobile.source.snapshot.ExtractionLayoutMode
 import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import com.romulus.mobile.source.snapshot.SourcePathScope
 import com.romulus.mobile.source.snapshot.SourceSnapshotEntry
 import com.romulus.mobile.source.snapshot.SourceTorrentRef
 import com.romulus.mobile.source.snapshot.UnarchivePolicy
@@ -56,7 +57,7 @@ class ArchiveBrowseBuilderTest {
                 displayName = "Archive source",
                 subfolder = "roms",
                 torrents = listOf(SourceTorrentRef("magnet:?xt=urn:btih:test", "Disc 1")),
-                normalizedPath = "/Show/archive.zip",
+                scope = SourcePathScope("/Show/archive.zip", false),
                 ignoreGlobs = listOf("*.pdf"),
                 renameRule = RenameRule("(.*)", "$1"),
                 unarchivePolicy = UnarchivePolicy(
@@ -88,7 +89,7 @@ class ArchiveBrowseBuilderTest {
                 displayName = "Archive source",
                 subfolder = "roms",
                 torrents = listOf(SourceTorrentRef("magnet:?xt=urn:btih:test", null)),
-                normalizedPath = "/Show/archive.zip",
+                scope = SourcePathScope("/Show/archive.zip", false),
                 ignoreGlobs = emptyList(),
                 renameRule = null,
                 unarchivePolicy = null
@@ -120,7 +121,7 @@ class ArchiveBrowseBuilderTest {
                 displayName = "Archive source",
                 subfolder = "roms",
                 torrents = listOf(SourceTorrentRef("magnet:?xt=urn:btih:test", null)),
-                normalizedPath = "/Show/archive.zip",
+                scope = SourcePathScope("/Show/archive.zip", false),
                 ignoreGlobs = emptyList(),
                 renameRule = null,
                 unarchivePolicy = null

@@ -125,7 +125,7 @@ class SetupViewModel(
                 is SetupSubmissionResult.Rejected -> {
                     mutableState.value = draft.copy(
                         isSaving = false,
-                        errorMessage = formatRejection(result)
+                        errorMessage = result.toSetupErrorMessage()
                     )
                 }
             }
@@ -144,28 +144,30 @@ class SetupViewModel(
         else -> null
     }
 
-    private fun formatRejection(result: SetupSubmissionResult.Rejected): String {
-        val firstIssue = result.sourceIssues.firstOrNull() ?: return result.message
-        val issueMessage = when (firstIssue) {
-            is SourceValidationIssue.InvalidVersion ->
-                "Unsupported source version ${firstIssue.found}."
-
-            is SourceValidationIssue.InvalidSubfolder ->
-                "Invalid source subfolder ${firstIssue.subfolder}."
-
-            is SourceValidationIssue.InvalidPath ->
-                "Invalid source path ${firstIssue.path}."
-
-            is SourceValidationIssue.InvalidIgnoreRule ->
-                "Invalid ignore rule ${firstIssue.pattern}."
-
-            is SourceValidationIssue.InvalidRenameRule -> firstIssue.message
-            is SourceValidationIssue.InvalidUnarchiveRule -> firstIssue.message
-        }
-        return "${result.message} $issueMessage"
-    }
-
     private companion object {
         const val DEFAULT_MAX_CONCURRENCY = DownloadLimits.DEFAULT_CONCURRENCY
     }
+}
+
+internal fun SetupSubmissionResult.Rejected.toSetupErrorMessage(): String {
+    val firstIssue = sourceIssues.firstOrNull() ?: return message
+    val issueMessage = when (firstIssue) {
+        is SourceValidationIssue.InvalidVersion ->
+            "Unsupported source version ${firstIssue.found}."
+
+        is SourceValidationIssue.InvalidSubfolder ->
+            "Invalid source subfolder ${firstIssue.subfolder}."
+
+        is SourceValidationIssue.InvalidPath ->
+            "Invalid source path ${firstIssue.path}."
+
+        is SourceValidationIssue.InvalidScope -> firstIssue.message
+
+        is SourceValidationIssue.InvalidIgnoreRule ->
+            "Invalid ignore rule ${firstIssue.pattern}."
+
+        is SourceValidationIssue.InvalidRenameRule -> firstIssue.message
+        is SourceValidationIssue.InvalidUnarchiveRule -> firstIssue.message
+    }
+    return "$message $issueMessage"
 }

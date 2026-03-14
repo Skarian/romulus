@@ -6,6 +6,7 @@ import com.romulus.mobile.realdebrid.ProviderInventoryRequest
 import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import com.romulus.mobile.source.snapshot.SourcePathScope
 import com.romulus.mobile.source.snapshot.SourceSnapshotEntry
 import com.romulus.mobile.source.snapshot.SourceTorrentRef
 import java.nio.file.Files
@@ -111,7 +112,7 @@ class CachedStandardBrowseInventoryServiceTest {
         displayName = "Shows",
         subfolder = "shows",
         torrents = torrents,
-        normalizedPath = "/",
+        scope = SourcePathScope("/", false),
         ignoreGlobs = emptyList(),
         renameRule = null,
         unarchivePolicy = null

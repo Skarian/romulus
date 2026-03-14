@@ -24,11 +24,14 @@ internal data class SourceTorrentDocument(
 internal data class IgnoreRulesDocument(val glob: List<String> = emptyList())
 
 @Serializable
+internal data class SourceScopeDocument(val path: String, val includeNestedFiles: Boolean = false)
+
+@Serializable
 internal data class SourceEntryDocument(
     val displayName: String,
     val subfolder: String,
     val torrents: List<SourceTorrentDocument>,
-    val path: String? = null,
+    val scope: SourceScopeDocument? = null,
     val ignore: IgnoreRulesDocument? = null,
     val rename: RenameRule? = null,
     val unarchive: UnarchiveDocument? = null

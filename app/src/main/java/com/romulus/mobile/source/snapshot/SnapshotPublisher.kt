@@ -11,7 +11,8 @@ import com.romulus.mobile.source.ingest.SourceValidation
 import com.romulus.mobile.source.ingest.SourceValidationIssue
 import com.romulus.mobile.source.ingest.StagedSourceConfig
 import com.romulus.mobile.source.ingest.UnarchiveLayoutModeDocument
-import com.romulus.mobile.source.ingest.normalizePath
+import com.romulus.mobile.source.ingest.defaultSourcePathScope
+import com.romulus.mobile.source.ingest.normalizeScope
 import java.nio.charset.StandardCharsets
 import java.time.Clock
 import java.time.Instant
@@ -35,7 +36,6 @@ internal interface SourceStateOwner {
     suspend fun readStartupReadiness(): SourceReadiness
 }
 
-private const val SOURCE_ROOT_PATH = "/"
 private const val BROKEN_FILE_MESSAGE = "Saved source file can no longer be read."
 private const val LOAD_ERROR_MESSAGE = "Source could not be loaded."
 private const val RETAINED_PRIOR_MESSAGE =
@@ -450,13 +450,13 @@ private fun SourceDocument.toSnapshot(acceptedAt: Instant): SourceSnapshot = Sou
 )
 
 private fun SourceEntryDocument.toSnapshotEntry(index: Int): SourceSnapshotEntry {
-    val normalizedPath = normalizePath(path) ?: SOURCE_ROOT_PATH
+    val scope = normalizeScope(scope) ?: defaultSourcePathScope()
     val rawIgnoreGlobs = ignore?.glob.orEmpty()
     val ignoreGlobs = rawIgnoreGlobs
         .map(String::trim)
         .filter(String::isNotBlank)
     return SourceSnapshotEntry(
-        entryId = SourceEntryId(entryIdFor(index, normalizedPath)),
+        entryId = SourceEntryId(entryIdFor(index, scope)),
         displayName = displayName,
         subfolder = subfolder.trim(),
         torrents = torrents.map { torrent ->
@@ -465,7 +465,7 @@ private fun SourceEntryDocument.toSnapshotEntry(index: Int): SourceSnapshotEntry
                 partLabel = torrent.partLabel
             )
         },
-        normalizedPath = normalizedPath,
+        scope = scope,
         ignoreGlobs = ignoreGlobs,
         renameRule = rename,
         unarchivePolicy = unarchive?.toPolicy()
@@ -485,7 +485,7 @@ private fun com.romulus.mobile.source.ingest.UnarchiveDocument.toPolicy(): Unarc
         )
     )
 
-private fun SourceEntryDocument.entryIdFor(index: Int, normalizedPath: String): String {
+private fun SourceEntryDocument.entryIdFor(index: Int, scope: SourcePathScope): String {
     val seed = buildString {
         append(index)
         append('|')
@@ -493,7 +493,9 @@ private fun SourceEntryDocument.entryIdFor(index: Int, normalizedPath: String): 
         append('|')
         append(subfolder)
         append('|')
-        append(normalizedPath)
+        append(scope.normalizedPath)
+        append('|')
+        append(scope.includeNestedFiles)
         torrents.forEach { torrent ->
             append('|')
             append(torrent.url)
@@ -534,6 +536,7 @@ private fun SourceValidationIssue.toRefreshFailureMessage(): String = when (this
     is SourceValidationIssue.InvalidVersion -> "Unsupported source version: $found."
     is SourceValidationIssue.InvalidSubfolder -> "Invalid subfolder: $subfolder."
     is SourceValidationIssue.InvalidPath -> "Invalid path: $path."
+    is SourceValidationIssue.InvalidScope -> message
     is SourceValidationIssue.InvalidIgnoreRule -> "Invalid ignore rule: $pattern."
     is SourceValidationIssue.InvalidRenameRule -> message
     is SourceValidationIssue.InvalidUnarchiveRule -> message

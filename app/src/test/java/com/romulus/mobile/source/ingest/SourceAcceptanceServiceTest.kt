@@ -7,6 +7,7 @@ import com.romulus.mobile.source.InMemorySourceConfigStore
 import com.romulus.mobile.source.sourceSchemaValidator
 import com.romulus.mobile.source.snapshot.HomeSourceState
 import com.romulus.mobile.source.snapshot.SnapshotPublisher
+import com.romulus.mobile.source.snapshot.SourcePathScope
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -28,7 +29,16 @@ class SourceAcceptanceServiceTest {
         val loader = FakeSourceLoader().apply {
             setUrlBody(
                 "https://example.com/source.json",
-                validSourceJson(displayName = "Movies", subfolder = "movies")
+                validSourceJson(
+                    displayName = "Movies",
+                    subfolder = "movies",
+                    scopeJson = """
+                        "scope": {
+                          "path": "/Shows/",
+                          "includeNestedFiles": true
+                        },
+                    """.trimIndent()
+                )
             )
         }
         val sourceConfigStore = InMemorySourceConfigStore()
@@ -56,10 +66,14 @@ class SourceAcceptanceServiceTest {
                 rawValue = "https://example.com/source.json",
                 persistedUri = null
             )
-        )
+        ) as AcceptSourceResult.Accepted
 
-        assertTrue(result is AcceptSourceResult.Accepted)
+        val snapshot = snapshotStore.read(result.snapshotId)
         assertEquals(SourceMode.URL, publisher.observeAcceptedSourceSummary().value?.mode)
+        assertEquals(
+            SourcePathScope(normalizedPath = "/Shows/", includeNestedFiles = true),
+            snapshot?.entries?.single()?.scope
+        )
         assertTrue(publisher.readStartupReadiness().isUsable)
         assertTrue(publisher.observeHomeState().value is HomeSourceState.Content)
     }
@@ -76,7 +90,12 @@ class SourceAcceptanceServiceTest {
                 validSourceJson(
                     displayName = "Broken",
                     subfolder = "broken",
-                    path = "/movie.mkv"
+                    scopeJson = """
+                        "scope": {
+                          "path": "/broken/archive.zip",
+                          "includeNestedFiles": true
+                        },
+                    """.trimIndent()
                 )
             )
         }
@@ -117,20 +136,39 @@ class SourceAcceptanceServiceTest {
         )
 
         val homeState = publisher.observeHomeState().value as HomeSourceState.Content
+        assertTrue(rejected is AcceptSourceResult.Rejected)
         assertTrue(
-            rejected is AcceptSourceResult.Rejected ||
-                rejected is AcceptSourceResult.Failed
+            (rejected as AcceptSourceResult.Rejected)
+                .issues
+                .single() is SourceValidationIssue.InvalidScope
         )
-        assertEquals("https://example.com/valid.json", publisher.observeAcceptedSourceSummary().value?.rawValue)
+        assertEquals(
+            "https://example.com/valid.json",
+            publisher.observeAcceptedSourceSummary().value?.rawValue
+        )
         assertEquals(accepted.snapshotId, homeState.snapshotId)
     }
 
     @Test
-    fun schemaInvalidSourceDoesNotActivate() = runTest {
+    fun legacyTopLevelPathFailsSchemaValidationAndDoesNotActivate() = runTest {
         val loader = FakeSourceLoader().apply {
             setUrlBody(
                 "https://example.com/invalid-schema.json",
-                validSourceJson(displayName = "   ", subfolder = "movies")
+                """
+                    {
+                      "version": 1,
+                      "entries": [
+                        {
+                          "displayName": "Movies",
+                          "subfolder": "movies",
+                          "path": "/",
+                          "torrents": [
+                            { "url": "magnet:?xt=urn:btih:one", "partName": "Part A" }
+                          ]
+                        }
+                      ]
+                    }
+                """.trimIndent()
             )
         }
         val sourceConfigStore = InMemorySourceConfigStore()
@@ -167,7 +205,7 @@ class SourceAcceptanceServiceTest {
     private fun validSourceJson(
         displayName: String,
         subfolder: String,
-        path: String = "/"
+        scopeJson: String? = null
     ): String = """
         {
           "version": 1,
@@ -175,7 +213,7 @@ class SourceAcceptanceServiceTest {
             {
               "displayName": "$displayName",
               "subfolder": "$subfolder",
-              "path": "$path",
+              ${scopeJson.orEmpty()}
               "torrents": [
                 { "url": "magnet:?xt=urn:btih:one", "partName": "Part A" }
               ]

@@ -25,7 +25,7 @@ internal class StandardBrowseBuilder(
         }
 
         val items = inventory.files
-            .filter { file -> file.path.isWithinScope(entry.normalizedPath) }
+            .filter { file -> file.path.isWithinScope(entry.scope) }
             .filterNot { file -> file.originalName.matchesIgnoreRules(entry.ignoreGlobs) }
             .sortedBy { file -> file.originalName.lowercase() }
             .map { file ->

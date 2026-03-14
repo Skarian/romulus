@@ -12,9 +12,13 @@ internal class SourceValidation {
                 issues += SourceValidationIssue.InvalidSubfolder(entry.subfolder)
             }
 
-            val normalizedPath = normalizePath(entry.path)
-            if (normalizedPath == null) {
-                issues += SourceValidationIssue.InvalidPath(entry.path.orEmpty())
+            val normalizedScope = normalizeScope(entry.scope)
+            if (normalizedScope == null) {
+                issues += SourceValidationIssue.InvalidPath(entry.scope?.path.orEmpty())
+            } else if (!isScopeSemanticallyValid(normalizedScope)) {
+                issues += SourceValidationIssue.InvalidScope(
+                    "Exact .zip scope cannot set includeNestedFiles to true."
+                )
             }
 
             entry.ignore?.glob.orEmpty().forEach { pattern ->

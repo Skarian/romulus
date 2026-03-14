@@ -44,6 +44,8 @@ sealed interface SourceValidationIssue {
 
     data class InvalidPath(val path: String) : SourceValidationIssue
 
+    data class InvalidScope(val message: String) : SourceValidationIssue
+
     data class InvalidIgnoreRule(val pattern: String) : SourceValidationIssue
 
     data class InvalidRenameRule(val message: String) : SourceValidationIssue

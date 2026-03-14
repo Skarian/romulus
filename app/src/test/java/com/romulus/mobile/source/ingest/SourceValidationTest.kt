@@ -16,13 +16,35 @@ class SourceValidationTest {
                         displayName = "Movies",
                         subfolder = "movies",
                         torrents = listOf(SourceTorrentDocument(url = "magnet:?xt=urn:btih:one")),
-                        path = "/movie.mkv"
+                        scope = SourceScopeDocument(path = "/movie.mkv")
                     )
                 )
             )
         )
 
         assertTrue(issues.any { it is SourceValidationIssue.InvalidPath })
+    }
+
+    @Test
+    fun rejectsNestedFilesForExactZipScope() {
+        val issues = validation.validate(
+            SourceDocument(
+                version = 1,
+                entries = listOf(
+                    SourceEntryDocument(
+                        displayName = "Archive",
+                        subfolder = "archive",
+                        torrents = listOf(SourceTorrentDocument(url = "magnet:?xt=urn:btih:one")),
+                        scope = SourceScopeDocument(
+                            path = "/Show/archive.zip",
+                            includeNestedFiles = true
+                        )
+                    )
+                )
+            )
+        )
+
+        assertTrue(issues.any { it is SourceValidationIssue.InvalidScope })
     }
 
     @Test

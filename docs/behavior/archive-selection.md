@@ -3,12 +3,12 @@
 ## Trigger
 
 1. User opens Home Files page for a source entry.
-2. Entry `path` is a normalized exact file path to a `.zip` file inside that entry's torrent file set; path normalization and validity rules follow [`source.md`](source.md).
+2. Entry `scope.path` is a normalized exact file path to a `.zip` file inside that entry's torrent file set; scope normalization and validity rules follow [`source.md`](source.md).
 
 ## Expected Result
 
 1. Files page enters archive-selection mode for that entry.
-2. Archive-selection activation uses source path-normalization and path-validity rules from [`source.md`](source.md).
+2. Archive-selection activation uses source scope normalization and path-validity rules from [`source.md`](source.md).
 3. On the first open for a snapshot entry, app resolves the exact outer `.zip` file in Real-Debrid and starts provider preparation for that one container.
 4. While the outer `.zip` is still preparing in Real-Debrid, Files shows a centered preparing state instead of failing immediately.
 5. The preparing state uses plain-language copy, progress when available, and does not flash a generic loading message between polls.

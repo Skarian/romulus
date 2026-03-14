@@ -146,7 +146,7 @@ internal class ArchiveContainerPreparationService(
                         partLabel = torrent.partLabel
                     )
                 },
-                exactPath = entry.normalizedPath
+                exactPath = entry.scope.normalizedPath
             )
         ).getOrElse { failure ->
             return Result.failure(failure)

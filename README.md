@@ -46,13 +46,14 @@ After setup, bottom navigation routes are:
 
 ## Source JSON Contract
 
-Each source entry can optionally define a torrent-internal `path` scope. File selection only enumerates files whose Real-Debrid path is inside that folder.
+Each source entry can optionally define a torrent-internal `scope` object. `scope.path` says where file selection starts, and `scope.includeNestedFiles` controls whether deeper descendants are eligible.
 
 - `version` stays `1`.
-- `entries[i].path` is optional.
-- If `path` is omitted, `null`, or blank, it defaults to `/` (root scope, include all files).
-- `path` uses forward slashes and cannot contain `..`.
-- Path matching is boundary-safe: `/Season 1` does not match `/Season 10`.
+- `entries[i].scope` is optional.
+- If `scope` is omitted, it defaults to `{ "path": "/", "includeNestedFiles": false }`.
+- `scope.path` uses forward slashes and cannot contain `..`.
+- `scope.path: "/"` means top-level files only unless `scope.includeNestedFiles` is `true`.
+- Path matching is boundary-safe: `/Season 1/` does not match `/Season 10/`.
 
 Example:
 
@@ -63,7 +64,10 @@ Example:
     {
       "displayName": "Show Pack",
       "subfolder": "shows/show-pack",
-      "path": "/Series/Season 01",
+      "scope": {
+        "path": "/Series/Season 01/",
+        "includeNestedFiles": true
+      },
       "torrents": [
         { "url": "magnet:?xt=urn:btih:...", "partName": "Part 1" }
       ],

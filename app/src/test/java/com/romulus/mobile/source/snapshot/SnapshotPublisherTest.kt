@@ -7,9 +7,13 @@ import com.romulus.mobile.source.InMemorySourceConfigStore
 import com.romulus.mobile.source.sourceSchemaValidator
 import com.romulus.mobile.source.ingest.AcceptSourceCommand
 import com.romulus.mobile.source.ingest.AcceptedSourceConfigRecord
+import com.romulus.mobile.source.ingest.SourceDocument
 import com.romulus.mobile.source.ingest.SourceDocumentParser
+import com.romulus.mobile.source.ingest.SourceEntryDocument
 import com.romulus.mobile.source.ingest.SourceConfigStore
 import com.romulus.mobile.source.ingest.SourceMode
+import com.romulus.mobile.source.ingest.SourceScopeDocument
+import com.romulus.mobile.source.ingest.SourceTorrentDocument
 import com.romulus.mobile.source.ingest.SourceValidation
 import com.romulus.mobile.source.ingest.StagedSourceConfig
 import com.romulus.mobile.source.snapshot.SourceActivationStore
@@ -406,6 +410,58 @@ class SnapshotPublisherTest {
         assertTrue(publisher.readStartupReadiness().hasUsableSnapshot)
     }
 
+    @Test
+    fun omittedScopePersistsAsShallowRoot() = runTest {
+        val snapshotStore = InMemorySnapshotStore()
+        val publisher = publisher(snapshotStore)
+
+        val staged = publisher.stageReplacement(
+            document = SourceDocument(
+                version = 1,
+                entries = listOf(
+                    SourceEntryDocument(
+                        displayName = "Movies",
+                        subfolder = "movies",
+                        torrents = listOf(SourceTorrentDocument(url = "magnet:?xt=urn:btih:one"))
+                    )
+                )
+            ),
+            acceptedAt = clock.instant()
+        ).getOrThrow()
+
+        val snapshot = snapshotStore.read(staged.snapshotId)
+
+        assertEquals(SourcePathScope("/", false), snapshot?.entries?.single()?.scope)
+    }
+
+    @Test
+    fun exactZipScopePersistsUnchanged() = runTest {
+        val snapshotStore = InMemorySnapshotStore()
+        val publisher = publisher(snapshotStore)
+
+        val staged = publisher.stageReplacement(
+            document = SourceDocument(
+                version = 1,
+                entries = listOf(
+                    SourceEntryDocument(
+                        displayName = "Archive",
+                        subfolder = "archive",
+                        torrents = listOf(SourceTorrentDocument(url = "magnet:?xt=urn:btih:one")),
+                        scope = SourceScopeDocument(path = "/Show/archive.zip")
+                    )
+                )
+            ),
+            acceptedAt = clock.instant()
+        ).getOrThrow()
+
+        val snapshot = snapshotStore.read(staged.snapshotId)
+
+        assertEquals(
+            SourcePathScope("/Show/archive.zip", false),
+            snapshot?.entries?.single()?.scope
+        )
+    }
+
     private suspend fun activateInitialUrlSource(
         publisher: SnapshotPublisher,
         parser: SourceDocumentParser,
@@ -461,6 +517,16 @@ class SnapshotPublisherTest {
             """.trimIndent()
         )
     }
+
+    private fun publisher(snapshotStore: InMemorySnapshotStore): SnapshotPublisher =
+        SnapshotPublisher(
+            snapshotStore = snapshotStore,
+            sourceConfigStore = InMemorySourceConfigStore(),
+            activationStore = InMemorySourceActivationStore(),
+            parser = SourceDocumentParser(FakeSourceLoader(), json, sourceSchemaValidator()),
+            validation = SourceValidation(),
+            clock = clock
+        )
 }
 
 private class FailingSnapshotStore(

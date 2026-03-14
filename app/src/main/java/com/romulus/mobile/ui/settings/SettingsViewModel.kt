@@ -360,6 +360,7 @@ internal fun SourceValidationIssue.toSettingsFeedbackMessage(): String = when (t
     is SourceValidationIssue.InvalidVersion -> "Unsupported source version: $found."
     is SourceValidationIssue.InvalidSubfolder -> "Invalid subfolder: $subfolder."
     is SourceValidationIssue.InvalidPath -> "Invalid path: $path."
+    is SourceValidationIssue.InvalidScope -> message
     is SourceValidationIssue.InvalidIgnoreRule -> "Invalid ignore rule: $pattern."
     is SourceValidationIssue.InvalidRenameRule -> message
     is SourceValidationIssue.InvalidUnarchiveRule -> message

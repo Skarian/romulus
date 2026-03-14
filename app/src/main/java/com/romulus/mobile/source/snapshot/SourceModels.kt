@@ -33,12 +33,15 @@ data class ExtractionLayoutPolicy(
 data class UnarchivePolicy(val recursiveDefault: Boolean, val layout: ExtractionLayoutPolicy)
 
 @Serializable
+data class SourcePathScope(val normalizedPath: String, val includeNestedFiles: Boolean)
+
+@Serializable
 data class SourceSnapshotEntry(
     val entryId: SourceEntryId,
     val displayName: String,
     val subfolder: String,
     val torrents: List<SourceTorrentRef>,
-    val normalizedPath: String,
+    val scope: SourcePathScope,
     val ignoreGlobs: List<String>,
     val renameRule: RenameRule?,
     val unarchivePolicy: UnarchivePolicy?

@@ -18,8 +18,8 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
 - Stage and publish the latest active snapshot.
 - Expose live source-readiness and home-state projections.
 - Prepare standard browse rows from locally cached browse inventory keyed by snapshot entry, filling that cache through temporary Real-Debrid enumeration when needed.
-- Prepare archive-selection browse rows from exact `.zip` paths through `remotezip/`.
-- Apply path scope first and ignore rules second before rows reach `ui/files`.
+- Prepare archive-selection browse rows from exact `.zip` `scope.path` values through `remotezip/`.
+- Apply source scope first and ignore rules second before rows reach `ui/files`.
 
 ## Explicit Non-Responsibilities
 
@@ -302,10 +302,15 @@ data class SourceEntryDocument(
     val displayName: String,
     val subfolder: String,
     val torrents: List<SourceTorrentDocument>,
-    val path: String?,
+    val scope: SourceScopeDocument?,
     val ignore: IgnoreRulesDocument?,
     val rename: RenameRule?,
     val unarchive: UnarchiveDocument?
+)
+
+data class SourceScopeDocument(
+    val path: String,
+    val includeNestedFiles: Boolean = false
 )
 
 data class UnarchiveDocument(
@@ -338,7 +343,7 @@ class SourceDocumentParser(
 ### `SourceValidation.kt`
 - Internal area: `source/ingest`
 - Purpose: centralize runtime validation rules that sharpen the schema.
-- Responsibility: reject invalid path scope, ignore rules, rename regex, and dedicated-folder rename regex that sharpen [`schema.json`](../schema.json) before any source update becomes active.
+- Responsibility: reject invalid source scope, ignore rules, rename regex, and dedicated-folder rename regex that sharpen [`schema.json`](../schema.json) before any source update becomes active.
 - Depends on: `SourceDocumentParser.kt`
 - Must not depend on: snapshot store or browse services
 - Visibility: `internal`
@@ -349,6 +354,7 @@ sealed interface SourceValidationIssue {
     data class InvalidVersion(val found: Int) : SourceValidationIssue
     data class InvalidSubfolder(val subfolder: String) : SourceValidationIssue
     data class InvalidPath(val path: String) : SourceValidationIssue
+    data class InvalidScope(val message: String) : SourceValidationIssue
     data class InvalidIgnoreRule(val pattern: String) : SourceValidationIssue
     data class InvalidRenameRule(val message: String) : SourceValidationIssue
     data class InvalidUnarchiveRule(val message: String) : SourceValidationIssue
@@ -358,7 +364,9 @@ class SourceValidation {
     fun validate(document: SourceDocument): List<SourceValidationIssue> {
         // Contract-bearing rules:
         // - only version 1 is accepted
-        // - path must normalize to root, directory scope, or exact `.zip`
+        // - omitted scope defaults to shallow root
+        // - scope.path must normalize to root, directory scope, or exact `.zip`
+        // - exact `.zip` scope cannot opt into nested files
         // - ignore globs must target basenames only
         // - rename regex must compile at acceptance time
         // - dedicated-folder rename regex must compile at acceptance time
@@ -368,16 +376,16 @@ class SourceValidation {
 
 ### `SourcePathRules.kt`
 - Internal area: `source/ingest`
-- Purpose: keep path normalization and ignore matching consistent between validation and browse.
-- Responsibility: normalize path values once and define the path-scope-then-ignore filtering rule.
+- Purpose: keep scope normalization and ignore matching consistent between validation and browse.
+- Responsibility: normalize scope values once and define the scope-then-ignore filtering rule.
 - Depends on: Kotlin stdlib only
 - Must not depend on: stores or provider clients
 - Visibility: `internal`
 - Key types/functions:
 
 ```kotlin
-fun normalizePath(raw: String?): String?
-fun ProviderFileRecord.isWithinScope(scope: String): Boolean
+fun normalizeScope(scope: SourceScopeDocument?): SourcePathScope?
+fun ProviderFileRecord.isWithinScope(scope: SourcePathScope): Boolean
 fun String.matchesIgnoreRules(ignoreGlobs: List<String>): Boolean
 ```
 
@@ -479,10 +487,15 @@ data class SourceSnapshotEntry(
     val displayName: String,
     val subfolder: String,
     val torrents: List<SourceTorrentRef>,
-    val normalizedPath: String,
+    val scope: SourcePathScope,
     val ignoreGlobs: List<String>,
     val renameRule: RenameRule?,
     val unarchivePolicy: UnarchivePolicy?
+)
+
+data class SourcePathScope(
+    val normalizedPath: String,
+    val includeNestedFiles: Boolean
 )
 
 data class UnarchivePolicy(
@@ -659,7 +672,7 @@ class BrowseService(
 ### `StandardBrowseBuilder.kt`
 - Internal area: `source/browse`
 - Purpose: build standard browse rows from cached standard browse inventory.
-- Responsibility: apply path scope first, ignore rules second, and assign stable item ids from source-entry id plus torrent-native selection intent.
+- Responsibility: apply source scope first, ignore rules second, and assign stable item ids from source-entry id plus torrent-native selection intent.
 - Depends on: `CachedStandardBrowseInventoryService`
 - Must not depend on: remote ZIP or queue services
 - Visibility: `internal`
@@ -816,12 +829,12 @@ sealed interface BrowseFailure {
    - `BrowseService` selects the entry from the active snapshot.
    - `StandardBrowseBuilder` asks the cached standard browse inventory service for that snapshot entry.
    - On cache miss, `source/` temporarily enumerates provider files through `realdebrid/`, stores the resulting browse inventory locally, and reuses it on later opens for the same snapshot entry.
-   - Path scope is applied first.
+   - Source scope is applied first.
    - Ignore rules are applied second.
    - Returned rows are sorted alphabetically by original file name.
 
 4. Archive-selection browse:
-   - `BrowseService` detects exact `.zip` path mode.
+   - `BrowseService` detects exact `.zip` `scope.path` mode.
    - `ArchiveBrowseBuilder` asks the shared archive-container preparation service for that snapshot entry.
    - On first open, `source/` finds the exact outer `.zip` through `realdebrid/`, starts provider preparation for that one container, and persists the matched file plus resume marker locally.
    - While the outer `.zip` is still preparing, Files stays in archive-preparing state and revisits resume that same provider acquisition instead of adding the magnet again.
@@ -863,9 +876,11 @@ sealed interface BrowseFailure {
 
 - Scope: unit
 - Covers:
-  - directory path validation
-  - exact `.zip` path validation
+  - omitted-scope shallow-root default
+  - directory scope validation
+  - exact `.zip` scope validation
   - exact non-`.zip` rejection
+  - exact `.zip` plus nested-files rejection
   - rename regex rejection at acceptance time
   - recursive-unarchive requires `unarchive=true`
 - Fixtures:
@@ -892,7 +907,7 @@ sealed interface BrowseFailure {
 
 - Scope: unit
 - Covers:
-  - path-scope-first filtering
+  - scope-first filtering
   - ignore-rules-second filtering
   - stable standard-file identity assignment
   - alphabetical sort by original file name

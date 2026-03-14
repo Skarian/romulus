@@ -48,4 +48,16 @@ class SettingsViewModelTest {
             feedback
         )
     }
+
+    @Test
+    fun scopeValidationFeedbackUsesSourceMessage() {
+        val feedback = SourceValidationIssue.InvalidScope(
+            message = "Exact .zip scope cannot set includeNestedFiles to true."
+        ).toSettingsFeedbackMessage()
+
+        assertEquals(
+            "Exact .zip scope cannot set includeNestedFiles to true.",
+            feedback
+        )
+    }
 }

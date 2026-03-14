@@ -7,9 +7,9 @@
 ## Expected Result
 
 1. On page open, app shows resolving or loading state until file resolution finishes or enters archive preparation.
-2. Files page chooses one resolution mode from entry `path`:
+2. Files page chooses one resolution mode from entry `scope`:
    - standard mode for directory or root scope,
-   - archive-selection mode for an exact `.zip` file path, as defined in [`archive-selection.md`](archive-selection.md).
+   - archive-selection mode for an exact `.zip` `scope.path`, as defined in [`archive-selection.md`](archive-selection.md).
 3. In standard mode, file list resolves from cached browse inventory for the selected snapshot entry.
 4. On the first successful standard-mode resolution for a snapshot entry, app may temporarily add the entry magnets to Real-Debrid, read the provider file list, cache the resulting browse inventory locally on-device, and then delete the temporary provider torrents.
 5. Android recreation caused by a configuration change does not trigger a new resolver run; resolver rerun happens only on page open for a source row or explicit user `Retry`.
@@ -22,9 +22,10 @@
    - the current `Apply rename`, `Unarchive`, and `Recursive unarchive` toggle state,
    - the current list position.
 7. In standard mode, files are included only when:
-   - file path is inside entry `path` scope,
+   - file path is inside entry `scope.path`,
+   - direct-child-only matching is used unless `scope.includeNestedFiles` is `true`,
    - file basename does not match ignore glob rules (case-insensitive).
-8. Standard-mode filtering order is path scope first, then ignore rules; source-validation rules for these fields follow [`source.md`](source.md).
+8. Standard-mode filtering order is scope first, then ignore rules; source-validation rules for these fields follow [`source.md`](source.md).
 9. File rows are sorted alphabetically by original file name in both modes:
    - standard mode uses torrent file names,
    - archive-selection mode uses internal zip file names.

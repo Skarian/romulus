@@ -76,7 +76,7 @@ diagnostics/
    - active snapshot identity and replacement,
    - standard file listing preparation,
    - archive-selection listing preparation.
-4. `source/` applies path scope first and ignore rules second before items reach `ui/files`.
+4. `source/` applies source scope first and ignore rules second before items reach `ui/files`.
 
 ### 3.4 `downloads/`
 
@@ -223,13 +223,13 @@ diagnostics/
 
 1. `ui/files` asks `source/browse` for the selectable items for one snapshot entry.
 2. `source/browse` reads cached standard browse inventory for the snapshot entry and fills that cache through temporary `realdebrid/` enumeration on cache miss.
-3. `source/browse` applies path scope first and ignore rules second.
+3. `source/browse` applies source scope first and ignore rules second.
 4. `source/browse` returns `SelectableItem.StandardFile[]` to `ui/files`.
 5. Search, multi-select, and dialog state remain in `ui/files`.
 
 ### 8.4 Archive-Selection Browse
 
-1. `source/browse` detects the exact `.zip` path case from the accepted source entry.
+1. `source/browse` detects the exact `.zip` `scope.path` case from the accepted source entry.
 2. `source/browse` asks `realdebrid/` for the exact outer ZIP URL.
 3. `source/browse` asks `remotezip/` to probe and enumerate internal entries.
 4. `source/browse` applies ignore rules before returning rows.

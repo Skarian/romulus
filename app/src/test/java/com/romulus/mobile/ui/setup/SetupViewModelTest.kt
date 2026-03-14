@@ -2,11 +2,13 @@ package com.romulus.mobile.ui.setup
 
 import androidx.lifecycle.SavedStateHandle
 import com.romulus.mobile.app.startup.SetupCompletionRecord
+import com.romulus.mobile.app.startup.SetupSubmissionResult
 import com.romulus.mobile.app.startup.SetupStateStore
 import com.romulus.mobile.app.startup.SetupSubmissionCoordinator
 import com.romulus.mobile.downloads.DownloadsFacade
 import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.source.SourceFacade
+import com.romulus.mobile.source.ingest.SourceValidationIssue
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -48,6 +50,23 @@ class SetupViewModelTest {
         viewModel.submit()
 
         assertEquals("Output directory is required.", viewModel.state.value.errorMessage)
+    }
+
+    @Test
+    fun scopeValidationFeedbackUsesSourceMessage() {
+        val message = SetupSubmissionResult.Rejected(
+            message = "Source was rejected",
+            sourceIssues = listOf(
+                SourceValidationIssue.InvalidScope(
+                    "Exact .zip scope cannot set includeNestedFiles to true."
+                )
+            )
+        ).toSetupErrorMessage()
+
+        assertEquals(
+            "Source was rejected Exact .zip scope cannot set includeNestedFiles to true.",
+            message
+        )
     }
 }
 

@@ -11,6 +11,7 @@ import com.romulus.mobile.remotezip.ArchiveEntryIdentity
 import com.romulus.mobile.remotezip.EnumeratedRemoteZip
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import com.romulus.mobile.source.snapshot.SourcePathScope
 import com.romulus.mobile.source.snapshot.SourceSnapshotEntry
 import com.romulus.mobile.source.snapshot.SourceTorrentRef
 import java.time.Clock
@@ -227,7 +228,7 @@ class ArchiveContainerPreparationServiceTest {
         displayName = "Archive source",
         subfolder = "roms",
         torrents = listOf(SourceTorrentRef("magnet:?xt=urn:btih:test", "Disc 1")),
-        normalizedPath = "/Show/archive.zip",
+        scope = SourcePathScope("/Show/archive.zip", false),
         ignoreGlobs = emptyList(),
         renameRule = null,
         unarchivePolicy = null

@@ -15,7 +15,7 @@ internal class BrowseService(
         return when {
             snapshot == null -> BrowseResult.Failed(BrowseFailure.MissingEntry(request.entryId))
             entry == null -> BrowseResult.Failed(BrowseFailure.MissingEntry(request.entryId))
-            isArchiveSelectionPath(entry.normalizedPath) -> {
+            isArchiveSelectionPath(entry.scope.normalizedPath) -> {
                 archiveBrowseBuilder.build(snapshot.snapshotId, entry)
             }
 
