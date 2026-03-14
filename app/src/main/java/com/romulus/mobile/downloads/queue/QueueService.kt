@@ -200,6 +200,9 @@ internal class QueueService(
 
     suspend fun readWakeGeneration(): Long = ledgerStore.readWakeGeneration()
 
+    suspend fun awaitWakeGenerationAdvance(afterGeneration: Long): Long =
+        ledgerStore.awaitWakeGenerationAdvance(afterGeneration)
+
     suspend fun acknowledgeDispatchStart(): Result<Long> = ledgerStore.acknowledgeDispatchStart()
 
     suspend fun beginAttempt(taskId: TaskId): Result<Int> =

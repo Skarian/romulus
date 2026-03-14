@@ -20,6 +20,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -118,6 +119,8 @@ interface DownloadLedgerStore {
     ): Set<String>
 
     suspend fun readWakeGeneration(): Long
+
+    suspend fun awaitWakeGenerationAdvance(afterGeneration: Long): Long
 
     suspend fun requestDispatch(): Result<Long>
 
@@ -544,6 +547,15 @@ internal class FileDownloadLedgerStore(
         .toSet()
 
     override suspend fun readWakeGeneration(): Long = ledgerState.value.wakeGeneration
+
+    override suspend fun awaitWakeGenerationAdvance(afterGeneration: Long): Long {
+        val currentGeneration = ledgerState.value.wakeGeneration
+        if (currentGeneration > afterGeneration) {
+            return currentGeneration
+        }
+        return ledgerState.map { current -> current.wakeGeneration }
+            .first { generation -> generation > afterGeneration }
+    }
 
     override suspend fun requestDispatch(): Result<Long> = try {
         mutex.withLock {

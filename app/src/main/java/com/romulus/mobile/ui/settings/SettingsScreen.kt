@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.romulus.mobile.app.platform.PersistedUriGrant
+import com.romulus.mobile.downloads.config.DownloadLimits
 import com.romulus.mobile.downloads.config.DownloadSettingsDraft
 import com.romulus.mobile.source.ingest.AcceptSourceCommand
 import com.romulus.mobile.source.ingest.SourceMode
@@ -316,6 +317,8 @@ fun SettingsScreen(
                 title = "Download behavior",
                 description = "Queue concurrency for the standard download flow."
             ) {
+                val minConcurrency = DownloadLimits.MIN_CONCURRENCY.toFloat()
+                val maxConcurrency = DownloadLimits.MAX_CONCURRENCY.toFloat()
                 Text(
                     text = "Max concurrency: ${concurrencyDraft.roundToInt()}",
                     style = MaterialTheme.typography.bodyMedium
@@ -326,8 +329,9 @@ fun SettingsScreen(
                         concurrencyDraft = it.roundToInt().toFloat()
                         viewModel.clearFeedback()
                     },
-                    valueRange = 1f..5f,
-                    steps = 3,
+                    valueRange = minConcurrency..maxConcurrency,
+                    steps = DownloadLimits.MAX_CONCURRENCY -
+                        DownloadLimits.MIN_CONCURRENCY - 1,
                     enabled = state.lockState.concurrencyEditable
                 )
                 Button(
@@ -336,8 +340,13 @@ fun SettingsScreen(
                         val concurrency = concurrencyDraft.roundToInt()
                         val outputDirectory = state.downloadSettings.outputDirectoryUri
                         when {
-                            concurrency !in 1..5 -> {
-                                viewModel.showFeedback("Concurrency must be between 1 and 5.")
+                            concurrency !in
+                                DownloadLimits.MIN_CONCURRENCY..DownloadLimits.MAX_CONCURRENCY -> {
+                                viewModel.showFeedback(
+                                    "Concurrency must be between " +
+                                        "${DownloadLimits.MIN_CONCURRENCY} and " +
+                                        "${DownloadLimits.MAX_CONCURRENCY}."
+                                )
                             }
 
                             outputDirectory.isNullOrBlank() -> {

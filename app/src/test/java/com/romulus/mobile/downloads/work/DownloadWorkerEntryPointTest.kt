@@ -7,10 +7,12 @@ import com.romulus.mobile.downloads.FakeOutputDirectoryAccess
 import com.romulus.mobile.downloads.FakeOutputFilesystem
 import com.romulus.mobile.downloads.FakeProviderRuntimeGateway
 import com.romulus.mobile.downloads.RecordingWorkerLauncher
+import com.romulus.mobile.downloads.attempts.ArchiveContainerGateway
 import com.romulus.mobile.downloads.attempts.DownloadStream
 import com.romulus.mobile.downloads.attempts.DownloadTransport
 import com.romulus.mobile.downloads.attempts.ProviderRuntimeGateway
 import com.romulus.mobile.downloads.attempts.ArchiveEntryAttemptRunner
+import com.romulus.mobile.downloads.attempts.RemoteZipCopyGateway
 import com.romulus.mobile.downloads.attempts.StandardAttemptRunner
 import com.romulus.mobile.downloads.config.DownloadSettingsService
 import com.romulus.mobile.downloads.config.DownloadSettingsState
@@ -28,9 +30,12 @@ import com.romulus.mobile.downloads.queue.PendingQueueAction
 import com.romulus.mobile.downloads.queue.QueueRecoveryPolicy
 import com.romulus.mobile.downloads.queue.QueueService
 import com.romulus.mobile.downloads.queue.QueueTaskState
+import com.romulus.mobile.downloads.queue.QueueTaskInput
 import com.romulus.mobile.downloads.queue.TransferCheckpoint
 import com.romulus.mobile.downloads.sampleQueueTaskInput
+import com.romulus.mobile.realdebrid.ArchiveContainerLocator
 import com.romulus.mobile.realdebrid.AcquisitionStatus
+import com.romulus.mobile.realdebrid.ProviderLocator
 import com.romulus.mobile.realdebrid.ProviderSelectionRequest
 import java.time.Clock
 import java.time.Instant
@@ -38,6 +43,7 @@ import java.time.ZoneOffset
 import java.io.ByteArrayInputStream
 import java.io.Closeable
 import java.io.InputStream
+import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -49,12 +55,21 @@ import kotlin.io.path.createTempDirectory
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import com.romulus.mobile.realdebrid.AuthRequiredException
 import com.romulus.mobile.realdebrid.ProviderReadyLink
 import com.romulus.mobile.realdebrid.ProviderResumeMarker
 import com.romulus.mobile.realdebrid.ResolvedDownloadUnit
+import com.romulus.mobile.remotezip.ArchiveEntryIdentity
+import com.romulus.mobile.source.browse.ArchivePreparationKey
+import com.romulus.mobile.source.browse.SelectableItemId
+import com.romulus.mobile.source.snapshot.ExtractionLayoutMode
+import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
+import com.romulus.mobile.source.snapshot.SnapshotId
+import com.romulus.mobile.source.snapshot.SourceEntryId
+import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
 
 class DownloadWorkerEntryPointTest {
     @Test
@@ -897,6 +912,287 @@ class DownloadWorkerEntryPointTest {
     }
 
     @Test
+    fun runUntilDrainedStartsLaterEnqueueFromDifferentEntryWhileSlowTaskIsRunning() = runTest {
+        val clock = Clock.fixed(Instant.parse("2026-03-14T18:00:00Z"), ZoneOffset.UTC)
+        val ledgerStore = FileDownloadLedgerStore(
+            ledgerFile = createTempDirectory("worker-ledger").toFile().resolve("ledger.json"),
+            json = queueJson(),
+            clock = clock
+        )
+        val settingsService = DownloadSettingsService.create(
+            store = FakeDownloadSettingsStore().apply {
+                persistedState = DownloadSettingsState(
+                    outputDirectoryUri = "content://downloads/tree",
+                    maxConcurrency = 2
+                )
+            },
+            outputAccess = FakeOutputDirectoryAccess(
+                usableUris = setOf("content://downloads/tree")
+            )
+        )
+        val providerGateway = NamedFileProviderRuntimeGateway()
+        val outputFilesystem = FakeOutputFilesystem(createTempDirectory("worker-output").toFile())
+        val workScheduler = WorkScheduler(
+            settingsService = settingsService,
+            ledgerStore = ledgerStore,
+            providerGateway = providerGateway,
+            workerLauncher = RecordingWorkerLauncher(),
+            clock = clock
+        )
+        val queueService = QueueService(
+            ledgerStore = ledgerStore,
+            executionControlRegistry = ExecutionControlRegistry(),
+            outputCleanupService = OutputCleanupService(outputFilesystem),
+            workScheduler = workScheduler,
+            clock = clock
+        )
+        queueService.enqueue(
+            listOf(
+                sampleStandardQueueTaskInput(
+                    name = "slow.mkv",
+                    entryId = "entry-a",
+                    selectedItemId = "item-a"
+                )
+            )
+        )
+        val slowStarted = CountDownLatch(1)
+        val lateStarted = CountDownLatch(1)
+        val releaseSlow = CountDownLatch(1)
+        val downloadTransport = SlotTrackingDownloadTransport(
+            slowFileName = "slow.mkv",
+            slowStarted = slowStarted,
+            lateStarted = lateStarted,
+            releaseSlow = releaseSlow
+        )
+        val entryPoint = createEntryPoint(
+            ledgerStore = ledgerStore,
+            settingsService = settingsService,
+            providerGateway = providerGateway,
+            outputFilesystem = outputFilesystem,
+            workScheduler = workScheduler,
+            queueService = queueService,
+            clock = clock,
+            downloadTransport = downloadTransport
+        )
+
+        val resultDeferred = async(Dispatchers.Default) { entryPoint.runUntilDrained() }
+
+        assertTrue(slowStarted.await(2, TimeUnit.SECONDS))
+        queueService.enqueue(
+            listOf(
+                sampleStandardQueueTaskInput(
+                    name = "late.mkv",
+                    entryId = "entry-b",
+                    selectedItemId = "item-b"
+                )
+            )
+        )
+
+        assertTrue(lateStarted.await(2, TimeUnit.SECONDS))
+
+        releaseSlow.countDown()
+
+        val result = resultDeferred.await()
+
+        assertTrue(result.isSuccess)
+        assertTrue(ledgerStore.readRows().all { row -> row.state == QueueTaskState.Completed })
+        assertFalse(ledgerStore.hasPendingDispatch())
+    }
+
+    @Test
+    fun runUntilDrainedStartsResumedRowWhileSlowTaskStillOccupiesAnotherSlot() = runTest {
+        val clock = Clock.fixed(Instant.parse("2026-03-14T18:30:00Z"), ZoneOffset.UTC)
+        val ledgerStore = FileDownloadLedgerStore(
+            ledgerFile = createTempDirectory("worker-ledger").toFile().resolve("ledger.json"),
+            json = queueJson(),
+            clock = clock
+        )
+        val settingsService = DownloadSettingsService.create(
+            store = FakeDownloadSettingsStore().apply {
+                persistedState = DownloadSettingsState(
+                    outputDirectoryUri = "content://downloads/tree",
+                    maxConcurrency = 2
+                )
+            },
+            outputAccess = FakeOutputDirectoryAccess(
+                usableUris = setOf("content://downloads/tree")
+            )
+        )
+        val providerGateway = NamedFileProviderRuntimeGateway()
+        val outputFilesystem = FakeOutputFilesystem(createTempDirectory("worker-output").toFile())
+        val workScheduler = WorkScheduler(
+            settingsService = settingsService,
+            ledgerStore = ledgerStore,
+            providerGateway = providerGateway,
+            workerLauncher = RecordingWorkerLauncher(),
+            clock = clock
+        )
+        val queueService = QueueService(
+            ledgerStore = ledgerStore,
+            executionControlRegistry = ExecutionControlRegistry(),
+            outputCleanupService = OutputCleanupService(outputFilesystem),
+            workScheduler = workScheduler,
+            clock = clock
+        )
+        val enqueueResult = queueService.enqueue(
+            listOf(
+                sampleStandardQueueTaskInput(
+                    name = "slow.mkv",
+                    entryId = "entry-a",
+                    selectedItemId = "item-a"
+                ),
+                sampleStandardQueueTaskInput(
+                    name = "late.mkv",
+                    entryId = "entry-b",
+                    selectedItemId = "item-b"
+                )
+            )
+        ) as EnqueueResult.Enqueued
+        val pausedTaskId = enqueueResult.taskIds.last()
+        ledgerStore.persistState(
+            pausedTaskId,
+            QueueTaskState.Paused(
+                TransferCheckpoint(
+                    downloadedBytes = 128L,
+                    totalBytes = 1_024L,
+                    lastPersistedAt = clock.instant(),
+                    tempFileToken = null,
+                    resumeByteOffset = 128L
+                )
+            )
+        ).getOrThrow()
+        val slowStarted = CountDownLatch(1)
+        val lateStarted = CountDownLatch(1)
+        val releaseSlow = CountDownLatch(1)
+        val downloadTransport = SlotTrackingDownloadTransport(
+            slowFileName = "slow.mkv",
+            slowStarted = slowStarted,
+            lateStarted = lateStarted,
+            releaseSlow = releaseSlow
+        )
+        val entryPoint = createEntryPoint(
+            ledgerStore = ledgerStore,
+            settingsService = settingsService,
+            providerGateway = providerGateway,
+            outputFilesystem = outputFilesystem,
+            workScheduler = workScheduler,
+            queueService = queueService,
+            clock = clock,
+            downloadTransport = downloadTransport
+        )
+
+        val resultDeferred = async(Dispatchers.Default) { entryPoint.runUntilDrained() }
+
+        assertTrue(slowStarted.await(2, TimeUnit.SECONDS))
+        queueService.performAction(com.romulus.mobile.downloads.queue.QueueActionCommand.Resume(pausedTaskId))
+            .getOrThrow()
+
+        assertTrue(lateStarted.await(2, TimeUnit.SECONDS))
+
+        releaseSlow.countDown()
+
+        val result = resultDeferred.await()
+
+        assertTrue(result.isSuccess)
+        assertTrue(ledgerStore.readRows().all { row -> row.state == QueueTaskState.Completed })
+        assertFalse(ledgerStore.hasPendingDispatch())
+    }
+
+    @Test
+    fun runUntilDrainedLetsArchiveEntryFillSpareSlotWhileStandardTaskStillRuns() = runTest {
+        val clock = Clock.fixed(Instant.parse("2026-03-14T19:00:00Z"), ZoneOffset.UTC)
+        val ledgerStore = FileDownloadLedgerStore(
+            ledgerFile = createTempDirectory("worker-ledger").toFile().resolve("ledger.json"),
+            json = queueJson(),
+            clock = clock
+        )
+        val settingsService = DownloadSettingsService.create(
+            store = FakeDownloadSettingsStore().apply {
+                persistedState = DownloadSettingsState(
+                    outputDirectoryUri = "content://downloads/tree",
+                    maxConcurrency = 2
+                )
+            },
+            outputAccess = FakeOutputDirectoryAccess(
+                usableUris = setOf("content://downloads/tree")
+            )
+        )
+        val providerGateway = NamedFileProviderRuntimeGateway()
+        val outputFilesystem = FakeOutputFilesystem(createTempDirectory("worker-output").toFile())
+        val workScheduler = WorkScheduler(
+            settingsService = settingsService,
+            ledgerStore = ledgerStore,
+            providerGateway = providerGateway,
+            workerLauncher = RecordingWorkerLauncher(),
+            clock = clock
+        )
+        val queueService = QueueService(
+            ledgerStore = ledgerStore,
+            executionControlRegistry = ExecutionControlRegistry(),
+            outputCleanupService = OutputCleanupService(outputFilesystem),
+            workScheduler = workScheduler,
+            clock = clock
+        )
+        queueService.enqueue(
+            listOf(
+                sampleStandardQueueTaskInput(
+                    name = "slow.mkv",
+                    entryId = "entry-standard",
+                    selectedItemId = "item-standard"
+                )
+            )
+        )
+        val slowStarted = CountDownLatch(1)
+        val archiveStarted = CountDownLatch(1)
+        val releaseSlow = CountDownLatch(1)
+        val downloadTransport = SlotTrackingDownloadTransport(
+            slowFileName = "slow.mkv",
+            slowStarted = slowStarted,
+            lateStarted = CountDownLatch(0),
+            releaseSlow = releaseSlow
+        )
+        val entryPoint = createEntryPoint(
+            ledgerStore = ledgerStore,
+            settingsService = settingsService,
+            providerGateway = providerGateway,
+            outputFilesystem = outputFilesystem,
+            workScheduler = workScheduler,
+            queueService = queueService,
+            clock = clock,
+            downloadTransport = downloadTransport,
+            archiveEntryAttemptRunner = createArchiveEntryAttemptRunner(
+                settingsService = settingsService,
+                outputFilesystem = outputFilesystem,
+                queueService = queueService,
+                clock = clock,
+                started = archiveStarted
+            )
+        )
+
+        val resultDeferred = async(Dispatchers.Default) { entryPoint.runUntilDrained() }
+
+        assertTrue(slowStarted.await(2, TimeUnit.SECONDS))
+        queueService.enqueue(
+            listOf(
+                sampleArchiveQueueTaskInput(
+                    originalDisplayName = "picked-entry.bin",
+                    entryId = "entry-archive",
+                    selectedItemId = "item-archive"
+                )
+            )
+        )
+
+        assertTrue(archiveStarted.await(2, TimeUnit.SECONDS))
+
+        releaseSlow.countDown()
+
+        val result = resultDeferred.await()
+
+        assertTrue(result.isSuccess)
+        assertTrue(ledgerStore.readRows().all { row -> row.state == QueueTaskState.Completed })
+    }
+
+    @Test
     fun runUntilDrainedHonorsPendingCancelWhenTransferFailsAfterCancelRequest() = runTest {
         val clock = Clock.fixed(Instant.parse("2026-03-11T01:30:00Z"), ZoneOffset.UTC)
         val ledgerStore = FileDownloadLedgerStore(
@@ -1023,6 +1319,124 @@ class DownloadWorkerEntryPointTest {
         classDiscriminator = "kind"
     }
 
+    private fun sampleStandardQueueTaskInput(
+        name: String,
+        entryId: String,
+        selectedItemId: String
+    ): QueueTaskInput {
+        val input = sampleQueueTaskInput(name)
+        val selectionIntent =
+            (input.executionContext as com.romulus.mobile.downloads.queue.QueueExecutionContext.StandardFile)
+                .selectionIntent
+        return input.copy(
+            entryId = SourceEntryId(entryId),
+            selectedItemId = SelectableItemId(selectedItemId),
+            executionContext = com.romulus.mobile.downloads.queue.QueueExecutionContext.StandardFile(
+                selectionIntent = selectionIntent.copy(
+                    normalizedPath = "shows/$name"
+                )
+            )
+        )
+    }
+
+    private fun sampleArchiveQueueTaskInput(
+        originalDisplayName: String,
+        entryId: String,
+        selectedItemId: String
+    ): QueueTaskInput = QueueTaskInput(
+        snapshotId = SnapshotId("snapshot-1"),
+        entryId = SourceEntryId(entryId),
+        selectedItemId = SelectableItemId(selectedItemId),
+        originalDisplayName = originalDisplayName,
+        originalSizeBytes = 12L,
+        sourceMetadata = com.romulus.mobile.downloads.queue.SourceQueueMetadata(
+            entryDisplayName = "Archive source",
+            partLabel = "Disc 1",
+            providerFileId = "outer-zip"
+        ),
+        namingIntent = com.romulus.mobile.downloads.queue.NamingIntent(
+            applyRename = false,
+            renameRule = null
+        ),
+        unarchiveIntent = com.romulus.mobile.downloads.queue.QueueUnarchiveIntent(
+            enabled = false,
+            recursive = false,
+            layout = ExtractionLayoutPolicy(mode = ExtractionLayoutMode.FLAT)
+        ),
+        storageTarget = com.romulus.mobile.downloads.queue.StorageTargetContext(subfolder = "archive"),
+        executionContext = com.romulus.mobile.downloads.queue.QueueExecutionContext.ArchiveEntry(
+            preparationKey = ArchivePreparationKey(
+                snapshotId = SnapshotId("snapshot-1"),
+                entryId = SourceEntryId(entryId)
+            ),
+            archiveEntryIdentity = ArchiveEntryIdentity(
+                localHeaderOffset = 10L,
+                compressedSize = 12L,
+                uncompressedSize = 12L,
+                crc32 = 99L,
+                normalizedPath = "folder/$originalDisplayName"
+            )
+        )
+    )
+
+    private fun createArchiveEntryAttemptRunner(
+        settingsService: DownloadSettingsService,
+        outputFilesystem: FakeOutputFilesystem,
+        queueService: QueueService,
+        clock: Clock,
+        started: CountDownLatch
+    ): ArchiveEntryAttemptRunner {
+        val outputReservationService = OutputReservationService(
+            outputFilesystem = outputFilesystem,
+            outputRootResolver = OutputRootResolver(
+                settingsService = settingsService,
+                clock = clock
+            ),
+            artifactRoot = createTempDirectory("worker-archive-artifacts").toFile()
+        )
+        return ArchiveEntryAttemptRunner(
+            archiveContainerGateway = object : ArchiveContainerGateway {
+                override suspend fun resolveReadyArchiveContainer(
+                    preparationKey: ArchivePreparationKey
+                ): Result<ArchiveContainerLocator> = Result.success(
+                    ArchiveContainerLocator(
+                        archiveUrl = "https://download.example/archive.zip",
+                        originalName = "archive.zip",
+                        providerLocator = ProviderLocator(
+                            sourceMagnetUri = "magnet:?xt=urn:btih:test",
+                            torrentId = "torrent-archive",
+                            providerFileIds = listOf("outer-zip"),
+                            selectedProviderFileId = "outer-zip",
+                            path = "archive.zip",
+                            partLabel = "Disc 1"
+                        )
+                    )
+                )
+            },
+            remoteZipCopyGateway = object : RemoteZipCopyGateway {
+                override suspend fun copySelectedEntry(
+                    request: com.romulus.mobile.remotezip.CopySelectedEntryRequest
+                ): Result<Unit> {
+                    started.countDown()
+                    Files.write(request.destination, "picked-entry".toByteArray())
+                    request.onProgress("picked-entry".length.toLong())
+                    return Result.success(Unit)
+                }
+            },
+            outputReservationService = outputReservationService,
+            outputFinalizer = OutputFinalizer(
+                reservationService = outputReservationService,
+                extractionController = ArchiveExtractionController(
+                    archiveRuntime = com.romulus.mobile.downloads.FakeArchiveRuntime(),
+                    outputFilesystem = outputFilesystem
+                ),
+                outputFilesystem = outputFilesystem
+            ),
+            queueService = queueService,
+            clock = clock
+        )
+    }
+
     private fun createEntryPoint(
         ledgerStore: DownloadLedgerStore,
         settingsService: DownloadSettingsService,
@@ -1031,7 +1445,8 @@ class DownloadWorkerEntryPointTest {
         workScheduler: WorkScheduler,
         queueService: QueueService,
         clock: Clock,
-        downloadTransport: DownloadTransport = FakeDownloadTransport("test".encodeToByteArray())
+        downloadTransport: DownloadTransport = FakeDownloadTransport("test".encodeToByteArray()),
+        archiveEntryAttemptRunner: ArchiveEntryAttemptRunner = ArchiveEntryAttemptRunner()
     ): DownloadWorkerEntryPoint = DownloadWorkerEntryPoint(
         queueService = queueService,
         recoveryPolicy = QueueRecoveryPolicy(
@@ -1075,7 +1490,7 @@ class DownloadWorkerEntryPointTest {
             queueService = queueService,
             clock = clock
         ),
-        archiveEntryAttemptRunner = ArchiveEntryAttemptRunner(),
+        archiveEntryAttemptRunner = archiveEntryAttemptRunner,
         clock = clock
     )
 }

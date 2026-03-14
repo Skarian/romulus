@@ -8,6 +8,16 @@ import org.junit.Test
 
 class DownloadSettingsServiceTest {
     @Test
+    fun createUsesDefaultConcurrencyWhenNothingIsPersisted() = runTest {
+        val service = DownloadSettingsService.create(
+            store = FakeDownloadSettingsStore(),
+            outputAccess = FakeOutputDirectoryAccess(usableUris = emptySet())
+        )
+
+        assertEquals(DownloadLimits.DEFAULT_CONCURRENCY, service.readState().maxConcurrency)
+    }
+
+    @Test
     fun updatePersistsValidatedSettingsAndReadiness() = runTest {
         val store = FakeDownloadSettingsStore()
         val outputAccess = FakeOutputDirectoryAccess(usableUris = setOf("content://downloads/tree"))
@@ -109,6 +119,26 @@ class DownloadSettingsServiceTest {
             "Max concurrency must be between ${DownloadLimits.MIN_CONCURRENCY} and ${DownloadLimits.MAX_CONCURRENCY}",
             result.exceptionOrNull()?.message
         )
+    }
+
+    @Test
+    fun maxConcurrencyAtUpperBoundIsAccepted() = runTest {
+        val service = DownloadSettingsService.create(
+            store = FakeDownloadSettingsStore(),
+            outputAccess = FakeOutputDirectoryAccess(
+                usableUris = setOf("content://downloads/tree")
+            )
+        )
+
+        val result = service.update(
+            DownloadSettingsDraft(
+                outputDirectoryUri = "content://downloads/tree",
+                maxConcurrency = DownloadLimits.MAX_CONCURRENCY
+            )
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals(DownloadLimits.MAX_CONCURRENCY, service.readState().maxConcurrency)
     }
 }
 

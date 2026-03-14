@@ -89,10 +89,25 @@ internal class DownloadWorkerEntryPoint(
                     }
                     return@coroutineScope workScheduler.scheduleNextDeferredWake()
                 }
-                val completedAttempt = awaitNextAttempt(activeAttempts)
-                activeAttempts.remove(completedAttempt.deferred)
-                completedAttempt.result.exceptionOrNull()?.let { failure ->
-                    return@coroutineScope Result.failure(failure)
+                when (
+                    val waitOutcome = awaitNextWorkerEvent(
+                        activeAttempts = activeAttempts,
+                        observedWakeGeneration = observedWakeGeneration
+                    )
+                ) {
+                    is WorkerWaitOutcome.AttemptCompleted -> {
+                        activeAttempts.remove(waitOutcome.completedAttempt.deferred)
+                        waitOutcome.completedAttempt.result.exceptionOrNull()?.let { failure ->
+                            return@coroutineScope Result.failure(failure)
+                        }
+                    }
+
+                    is WorkerWaitOutcome.WakeAdvanced -> {
+                        observedWakeGeneration =
+                            queueService.acknowledgeDispatchStart().getOrElse { throwable ->
+                                return@coroutineScope Result.failure(throwable)
+                            }
+                    }
                 }
             }
             @Suppress("UnreachableCode")
@@ -151,6 +166,44 @@ internal class DownloadWorkerEntryPoint(
                 }
             }
         }
+
+    private suspend fun kotlinx.coroutines.CoroutineScope.awaitNextWorkerEvent(
+        activeAttempts: Set<Deferred<Result<Unit>>>,
+        observedWakeGeneration: Long
+    ): WorkerWaitOutcome {
+        if (activeAttempts.isEmpty()) {
+            error("awaitNextWorkerEvent requires at least one active attempt")
+        }
+        val spareSlotsRemain = activeAttempts.size < workScheduler.readClaimLimit()
+        if (!spareSlotsRemain) {
+            return WorkerWaitOutcome.AttemptCompleted(awaitNextAttempt(activeAttempts))
+        }
+        val wakeAdvance = async {
+            queueService.awaitWakeGenerationAdvance(observedWakeGeneration)
+        }
+        return try {
+            select {
+                activeAttempts.forEach { deferred ->
+                    deferred.onAwait { result ->
+                        WorkerWaitOutcome.AttemptCompleted(
+                            CompletedAttempt(
+                                deferred = deferred,
+                                result = result
+                            )
+                        )
+                    }
+                }
+                wakeAdvance.onAwait { nextGeneration ->
+                    WorkerWaitOutcome.WakeAdvanced(nextGeneration)
+                }
+            }
+        } finally {
+            if (wakeAdvance.isActive) {
+                wakeAdvance.cancel()
+                wakeAdvance.join()
+            }
+        }
+    }
 
     @Suppress("CyclomaticComplexMethod", "LongMethod", "ReturnCount")
     private suspend fun processClaim(claim: QueueClaim): Result<Unit> {
@@ -228,6 +281,12 @@ internal class DownloadWorkerEntryPoint(
 }
 
 private data class CompletedAttempt(val deferred: Deferred<Result<Unit>>, val result: Result<Unit>)
+
+private sealed interface WorkerWaitOutcome {
+    data class AttemptCompleted(val completedAttempt: CompletedAttempt) : WorkerWaitOutcome
+
+    data class WakeAdvanced(val wakeGeneration: Long) : WorkerWaitOutcome
+}
 
 private fun List<Result<Unit>>.firstFailure(): Throwable? =
     firstOrNull(Result<Unit>::isFailure)?.exceptionOrNull()
