@@ -16,6 +16,10 @@ This folder is the post-run handoff from spike execution to architecture buildou
 3. `spike-3-remote-zip.md`
 4. `spike-4-integration.md`
 
+## Additional Output Files
+
+1. `spike-5-try-all-api.md`
+
 ## Required Sections Per Output
 
 1. Run context:
