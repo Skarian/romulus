@@ -169,13 +169,7 @@ This package doc uses structural pseudocode by default. Full pseudocode bodies a
 
 ```kotlin
 class RomulusApplication : Application() {
-    lateinit var appGraph: AppGraph
-        private set
-
-    override fun onCreate() {
-        super.onCreate()
-        appGraph = AppGraph.create(this)
-    }
+    val appGraph: AppGraph by lazy { AppGraph.create(this) }
 }
 ```
 
