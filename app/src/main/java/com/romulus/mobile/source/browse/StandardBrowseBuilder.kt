@@ -40,11 +40,7 @@ internal class StandardBrowseBuilder(
                     selectionPolicy = SelectionPolicy(
                         renameRule = entry.renameRule,
                         renameAvailable = entry.renameRule != null,
-                        unarchiveToggleVisible = entry.unarchiveConfigured,
-                        unarchiveDefault = entry.unarchiveConfigured && entry.unarchiveDefault,
-                        recursiveToggleVisible = entry.recursiveConfigured,
-                        recursiveUnarchiveDefault = entry.recursiveConfigured &&
-                            entry.recursiveUnarchiveDefault
+                        unarchivePolicy = entry.unarchivePolicy
                     ),
                     sourceContext = SelectableItemSourceContext(
                         entryDisplayName = entry.displayName,

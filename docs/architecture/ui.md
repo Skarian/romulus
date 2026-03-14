@@ -469,7 +469,7 @@ class FilesViewModel(
 ### `FilePreferencesState.kt`
 - Internal area: `ui/files`
 - Purpose: make the page-local rename and unarchive choices explicit.
-- Responsibility: normalize `recursiveUnarchive` to `false` whenever `unarchive` is off.
+- Responsibility: normalize recursive extraction to `false` whenever `unarchive` is off while preserving the source-defined layout policy for queueing.
 - Depends on: Kotlin stdlib only
 - Must not depend on: source stores or queue stores
 - Visibility: `internal`
@@ -479,9 +479,8 @@ class FilesViewModel(
 data class FilePreferencesState(
     val renameAvailable: Boolean,
     val applyRename: Boolean,
-    val unarchiveAvailable: Boolean,
+    val unarchivePolicy: ExtractionLayoutPolicy?,
     val unarchiveEnabled: Boolean,
-    val recursiveUnarchiveAvailable: Boolean,
     val recursiveUnarchiveEnabled: Boolean
 ) {
     fun normalized(): FilePreferencesState

@@ -10,6 +10,7 @@ import com.romulus.mobile.source.ingest.SourceMode
 import com.romulus.mobile.source.ingest.SourceValidation
 import com.romulus.mobile.source.ingest.SourceValidationIssue
 import com.romulus.mobile.source.ingest.StagedSourceConfig
+import com.romulus.mobile.source.ingest.UnarchiveLayoutModeDocument
 import com.romulus.mobile.source.ingest.normalizePath
 import java.nio.charset.StandardCharsets
 import java.time.Clock
@@ -467,12 +468,22 @@ private fun SourceEntryDocument.toSnapshotEntry(index: Int): SourceSnapshotEntry
         normalizedPath = normalizedPath,
         ignoreGlobs = ignoreGlobs,
         renameRule = rename,
-        unarchiveConfigured = unarchive != null,
-        unarchiveDefault = unarchive == true,
-        recursiveConfigured = recursiveUnarchive != null,
-        recursiveUnarchiveDefault = recursiveUnarchive == true
+        unarchivePolicy = unarchive?.toPolicy()
     )
 }
+
+private fun com.romulus.mobile.source.ingest.UnarchiveDocument.toPolicy(): UnarchivePolicy =
+    UnarchivePolicy(
+        recursiveDefault = recursive,
+        layout = ExtractionLayoutPolicy(
+            mode = when (layout.mode) {
+                UnarchiveLayoutModeDocument.FLAT -> ExtractionLayoutMode.FLAT
+                UnarchiveLayoutModeDocument.DEDICATED_FOLDER ->
+                    ExtractionLayoutMode.DEDICATED_FOLDER
+            },
+            folderRenameRule = layout.rename
+        )
+    )
 
 private fun SourceEntryDocument.entryIdFor(index: Int, normalizedPath: String): String {
     val seed = buildString {
@@ -525,5 +536,5 @@ private fun SourceValidationIssue.toRefreshFailureMessage(): String = when (this
     is SourceValidationIssue.InvalidPath -> "Invalid path: $path."
     is SourceValidationIssue.InvalidIgnoreRule -> "Invalid ignore rule: $pattern."
     is SourceValidationIssue.InvalidRenameRule -> message
-    is SourceValidationIssue.InvalidRecursiveUnarchive -> message
+    is SourceValidationIssue.InvalidUnarchiveRule -> message
 }

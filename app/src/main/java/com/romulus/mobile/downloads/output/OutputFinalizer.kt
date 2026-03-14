@@ -202,7 +202,7 @@ internal class OutputFinalizer(
             if (cursor.activePassReservedEntries.isEmpty()) {
                 val manifest = extractionController.inspectManifest(
                     archiveFile = File(pendingPass.archiveFilePath),
-                    recursive = task.recursiveUnarchiveIntent,
+                    recursive = task.unarchiveIntent.recursive,
                     lineage = pendingPass.lineage
                 ).getOrElse { throwable ->
                     val message = throwable.message ?: "Manifest inspection failed"
@@ -249,7 +249,7 @@ internal class OutputFinalizer(
             val extractionResult = extractionController.extract(
                 archiveFile = File(pendingPass.archiveFilePath),
                 extractionRoot = File(currentReservation.extractionRootPath),
-                recursive = task.recursiveUnarchiveIntent,
+                recursive = task.unarchiveIntent.recursive,
                 lineage = pendingPass.lineage,
                 passIndex = pendingPass.passIndex,
                 reservedOutputs = passReservedOutputs,

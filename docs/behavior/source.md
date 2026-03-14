@@ -25,11 +25,15 @@
    - invalid `path` (contains `..` or backslashes, or uses a non-root directory path without a trailing `/`) rejects source,
    - ignore glob matching is case-insensitive against file basename,
    - invalid ignore rules reject source.
-5. `unarchive` is optional and must be a boolean when present:
-   - omitted `unarchive` defaults to `false`.
-6. `recursiveUnarchive` is optional and must be a boolean when present:
-   - omitted `recursiveUnarchive` defaults to `false`,
-   - if present, `unarchive` must also be present and equal `true`.
+5. `unarchive` is optional and must be an object when present:
+   - if omitted, the entry exposes no unarchive controls on Files,
+   - if present, the entry exposes unarchive controls on Files and the main `Unarchive` toggle defaults on.
+6. When `unarchive` is present:
+   - `layout` is required,
+   - `layout.mode` must be `flat` or `dedicatedFolder`,
+   - `recursive` is optional and defaults to `false`,
+   - `layout.rename` is allowed only when `layout.mode` is `dedicatedFolder`,
+   - invalid rename regex in either entry `rename` or `unarchive.layout.rename` rejects source.
 7. Source validity is all-or-nothing:
    - fully valid source is accepted,
    - any invalid source is rejected.

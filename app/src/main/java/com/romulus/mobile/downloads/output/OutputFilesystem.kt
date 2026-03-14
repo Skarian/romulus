@@ -54,10 +54,7 @@ internal class AndroidOutputFilesystem(private val context: Context) : OutputFil
         if (directory == null) {
             emptySet()
         } else {
-            directory.listFiles()
-                .filter { file -> file.isFile && file.name != null }
-                .map { file -> buildRelativePath(subfolder, checkNotNull(file.name)) }
-                .toSet()
+            directory.collectRelativePaths(subfolder)
         }
     }
 
@@ -167,8 +164,33 @@ internal class AndroidOutputFilesystem(private val context: Context) : OutputFil
         }
     }
 
-    private fun buildRelativePath(subfolder: String, fileName: String): String =
-        listOf(subfolder, fileName)
+    private fun DocumentFile.collectRelativePaths(relativeDirectory: String): Set<String> =
+        listFiles().flatMapTo(linkedSetOf()) { document ->
+            when {
+                document.isFile && document.name != null -> {
+                    setOf(
+                        buildRelativePath(
+                            relativeDirectory = relativeDirectory,
+                            leafName = checkNotNull(document.name)
+                        )
+                    )
+                }
+
+                document.isDirectory && document.name != null -> {
+                    document.collectRelativePaths(
+                        buildRelativePath(
+                            relativeDirectory = relativeDirectory,
+                            leafName = checkNotNull(document.name)
+                        )
+                    )
+                }
+
+                else -> emptySet()
+            }
+        }
+
+    private fun buildRelativePath(relativeDirectory: String, leafName: String): String =
+        listOf(relativeDirectory, leafName)
             .filter(String::isNotBlank)
             .joinToString("/")
 

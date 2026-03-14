@@ -12,6 +12,7 @@ import com.romulus.mobile.downloads.queue.EnqueueResult
 import com.romulus.mobile.downloads.queue.NamingIntent
 import com.romulus.mobile.downloads.queue.QueueExecutionContext
 import com.romulus.mobile.downloads.queue.QueueTaskInput
+import com.romulus.mobile.downloads.queue.QueueUnarchiveIntent
 import com.romulus.mobile.downloads.queue.SourceQueueMetadata
 import com.romulus.mobile.downloads.queue.StorageTargetContext
 import com.romulus.mobile.source.SourceFacade
@@ -342,6 +343,10 @@ class FilesViewModel(
                     "recursiveUnarchive",
                     normalizedPreferences.recursiveUnarchiveEnabled.toString()
                 )
+                put(
+                    "extractLayout",
+                    normalizedPreferences.unarchivePolicy?.mode?.name ?: "FLAT"
+                )
                 when (result) {
                     is EnqueueResult.Rejected -> put("message", result.message)
                     is EnqueueResult.Failed -> put("message", result.message)
@@ -438,9 +443,13 @@ class FilesViewModel(
                     null
                 }
             ),
-            unarchiveIntent = preferences.unarchiveAvailable && preferences.unarchiveEnabled,
-            recursiveUnarchiveIntent = preferences.recursiveUnarchiveAvailable &&
-                preferences.recursiveUnarchiveEnabled,
+            unarchiveIntent = QueueUnarchiveIntent(
+                enabled = preferences.unarchiveAvailable && preferences.unarchiveEnabled,
+                recursive = preferences.unarchiveAvailable &&
+                    preferences.unarchiveEnabled &&
+                    preferences.recursiveUnarchiveEnabled,
+                layout = preferences.unarchivePolicy ?: FilePreferencesState.flatLayout()
+            ),
             storageTarget = StorageTargetContext(subfolder = sourceContext.outputSubfolder),
             executionContext = when (this) {
                 is SelectableItem.StandardFile -> QueueExecutionContext.StandardFile(

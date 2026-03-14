@@ -50,7 +50,6 @@ internal class QueueService(
                 sourceMetadata = input.sourceMetadata,
                 namingIntent = input.namingIntent,
                 unarchiveIntent = input.unarchiveIntent,
-                recursiveUnarchiveIntent = input.recursiveUnarchiveIntent,
                 storageTarget = input.storageTarget,
                 executionContext = input.executionContext
             )

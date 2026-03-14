@@ -42,15 +42,18 @@
 18. `Apply rename` appears inside `File preferences` only when `entries[i].rename` exists with valid `pattern` and `replacement` fields.
 19. When shown, `Apply rename` initial toggle state is enabled.
 20. User can toggle `Apply rename` for the current Files page before queueing; this does not rewrite source JSON.
-21. `Unarchive` appears inside `File preferences` only when `entries[i].unarchive` key is present (even when its value is `false`).
-22. When shown, `Unarchive` initial toggle state equals `entries[i].unarchive`.
+21. `Unarchive` appears inside `File preferences` only when `entries[i].unarchive` object is present.
+22. When shown, `Unarchive` initial toggle state is enabled.
 23. User can toggle `Unarchive` for the current Files page before queueing; this does not rewrite source JSON.
-24. `Recursive unarchive` appears inside `File preferences` only when `entries[i].recursiveUnarchive` key is present (even when its value is `false`).
+24. `Recursive unarchive` appears inside `File preferences` only when `entries[i].unarchive` object is present.
 25. When shown, `Recursive unarchive` is enabled only while `Unarchive` is enabled for the current Files page.
-26. When `Unarchive` is enabled, `Recursive unarchive` initial toggle state equals `entries[i].recursiveUnarchive`.
+26. When `Unarchive` is enabled, `Recursive unarchive` initial toggle state equals `entries[i].unarchive.recursive` when present, or `false` when omitted.
 27. When `Unarchive` is disabled, `Recursive unarchive` shows as off and non-interactive.
 28. User can toggle `Recursive unarchive` for the current Files page before queueing only while `Unarchive` is enabled; this does not rewrite source JSON.
-29. Queue payload normalizes `recursive-unarchive intent` to `false` whenever `unarchive intent` is `false`.
+29. Queue payload stores one unarchive intent for the selected row:
+   - whether unarchive is enabled,
+   - whether recursive extraction is enabled,
+   - the source-defined extraction layout policy.
 30. Multi-select is supported.
 31. Select all and select none operate on visible rows only.
 32. Download action is disabled until at least one file is selected.
@@ -64,7 +67,6 @@
    - file identity,
    - naming intent,
    - unarchive intent,
-   - recursive-unarchive intent,
    - storage target context,
    - source-derived execution context needed for later execution, retry, restart, and recovery without rebinding to a newer active snapshot:
      - torrent-native selection intent for standard mode,

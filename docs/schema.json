@@ -80,38 +80,13 @@
           "description": "Optional rename rule. If omitted, no rename behavior is applied for this entry."
         },
         "unarchive": {
-          "type": "boolean",
-          "default": false,
-          "description": "Optional archive extraction flag for this entry. If omitted, behavior defaults to false."
-        },
-        "recursiveUnarchive": {
-          "type": "boolean",
-          "default": false,
-          "description": "Optional recursive archive extraction flag for this entry. If omitted, behavior defaults to false. Only applies when unarchive behavior is enabled for queued files."
+          "$ref": "#/$defs/unarchive",
+          "description": "Optional unarchive policy. If present, Files shows unarchive controls, the main unarchive toggle defaults on, and layout must be declared explicitly."
         },
         "ignore": {
           "$ref": "#/$defs/ignore"
         }
-      },
-      "allOf": [
-        {
-          "if": {
-            "required": [
-              "recursiveUnarchive"
-            ]
-          },
-          "then": {
-            "required": [
-              "unarchive"
-            ],
-            "properties": {
-              "unarchive": {
-                "const": true
-              }
-            }
-          }
-        }
-      ]
+      }
     },
     "torrent": {
       "type": "object",
@@ -151,6 +126,61 @@
           "pattern": ".*\\S.*"
         }
       }
+    },
+    "unarchive": {
+      "type": "object",
+      "required": [
+        "layout"
+      ],
+      "properties": {
+        "recursive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Optional recursive archive extraction default. If omitted, behavior defaults to false."
+        },
+        "layout": {
+          "$ref": "#/$defs/unarchiveLayout"
+        }
+      },
+      "additionalProperties": false
+    },
+    "unarchiveLayout": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "flat",
+            "dedicatedFolder"
+          ]
+        },
+        "rename": {
+          "$ref": "#/$defs/rename",
+          "description": "Optional rename rule for the dedicated extract folder name."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "flat"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "rename"
+              ]
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
     },
     "ignore": {
       "type": "object",

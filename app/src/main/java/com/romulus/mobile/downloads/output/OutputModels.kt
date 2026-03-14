@@ -2,6 +2,7 @@
 
 package com.romulus.mobile.downloads.output
 
+import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -47,7 +48,9 @@ data class ReservedArtifact(
     val originalDisplayName: String,
     val tempArtifactPath: String,
     val extractionRootPath: String,
-    val handling: ReservedArtifactHandling
+    val handling: ReservedArtifactHandling,
+    val extractionLayout: ExtractionLayoutPolicy? = null,
+    val resolvedExtractionDirectory: String? = null
 )
 
 @Serializable
@@ -64,7 +67,9 @@ data class OutputReservation(
         tempArtifactPath: String,
         extractionRootPath: String,
         directOutput: ReservedDirectOutput?,
-        extractionPlan: List<ReservedExtractionOutput>
+        extractionPlan: List<ReservedExtractionOutput>,
+        extractionLayout: ExtractionLayoutPolicy? = null,
+        resolvedExtractionDirectory: String? = null
     ) : this(
         reservationId = reservationId,
         boundOutputDirectoryUri = boundOutputDirectoryUri,
@@ -78,7 +83,9 @@ data class OutputReservation(
                 ReservedArtifactHandling.DIRECT_SAVE
             } else {
                 ReservedArtifactHandling.LOCAL_UNARCHIVE
-            }
+            },
+            extractionLayout = extractionLayout,
+            resolvedExtractionDirectory = resolvedExtractionDirectory
         ),
         directOutput = directOutput,
         extractionPlan = extractionPlan

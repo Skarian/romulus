@@ -8,6 +8,8 @@ import com.romulus.mobile.source.browse.SelectableItem
 import com.romulus.mobile.source.browse.SelectableItemId
 import com.romulus.mobile.source.browse.SelectableItemSourceContext
 import com.romulus.mobile.source.browse.SelectionPolicy
+import com.romulus.mobile.source.snapshot.ExtractionLayoutMode
+import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
 import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
@@ -95,9 +97,8 @@ class FilesViewModelTest {
                 FilePreferencesState(
                     renameAvailable = true,
                     applyRename = true,
-                    unarchiveAvailable = true,
+                    unarchivePolicy = ExtractionLayoutPolicy(mode = ExtractionLayoutMode.FLAT),
                     unarchiveEnabled = true,
-                    recursiveUnarchiveAvailable = true,
                     recursiveUnarchiveEnabled = true
                 )
             )
@@ -129,10 +130,7 @@ class FilesViewModelTest {
             selectionPolicy = SelectionPolicy(
                 renameRule = null,
                 renameAvailable = false,
-                unarchiveToggleVisible = false,
-                unarchiveDefault = false,
-                recursiveToggleVisible = false,
-                recursiveUnarchiveDefault = false
+                unarchivePolicy = null
             ),
             sourceContext = SelectableItemSourceContext(
                 entryDisplayName = "Entry",

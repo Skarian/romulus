@@ -372,8 +372,7 @@ data class QueueTaskInput(
     val originalSizeBytes: Long?,
     val sourceMetadata: SourceQueueMetadata,
     val namingIntent: NamingIntent,
-    val unarchiveIntent: Boolean,
-    val recursiveUnarchiveIntent: Boolean,
+    val unarchiveIntent: QueueUnarchiveIntent,
     val storageTarget: StorageTargetContext,
     val executionContext: QueueExecutionContext
 )
@@ -388,8 +387,7 @@ data class QueueTask(
     val originalSizeBytes: Long?,
     val sourceMetadata: SourceQueueMetadata,
     val namingIntent: NamingIntent,
-    val unarchiveIntent: Boolean,
-    val recursiveUnarchiveIntent: Boolean,
+    val unarchiveIntent: QueueUnarchiveIntent,
     val storageTarget: StorageTargetContext,
     val executionContext: QueueExecutionContext
 )
@@ -747,6 +745,7 @@ interface ControlHandle {
 - Internal area: `downloads/attempts`
 - Purpose: execute one standard-file queue row.
 - Responsibility: start or resume provider acquisition through the public `realdebrid/` seam, persist `Preparing` metadata updates while `downloads/` owns the timeout window, resolve the ready link only after acquisition finishes, stream bytes, and stop promptly on pause or cancel signals.
+- Transfer policy: unrestricted file transfers use a dedicated OkHttp client with a short connect timeout, a stall-tolerant read timeout, and no overall call timeout so multi-GB downloads are not killed merely for taking a long time end-to-end.
 - Depends on: `RealDebridFacade`, `OutputReservationService`, `OutputFinalizer`, `QueueService`
 - Must not depend on: ledger stores directly
 - Visibility: `internal`

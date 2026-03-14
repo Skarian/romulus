@@ -22,6 +22,7 @@ import com.romulus.mobile.downloads.queue.NamingIntent
 import com.romulus.mobile.downloads.queue.QueueExecutionContext
 import com.romulus.mobile.downloads.queue.QueueService
 import com.romulus.mobile.downloads.queue.QueueTaskInput
+import com.romulus.mobile.downloads.queue.QueueUnarchiveIntent
 import com.romulus.mobile.downloads.queue.RecoveryDecision
 import com.romulus.mobile.downloads.queue.SourceQueueMetadata
 import com.romulus.mobile.downloads.queue.StorageTargetContext
@@ -33,6 +34,8 @@ import com.romulus.mobile.realdebrid.auth.TokenReadiness
 import com.romulus.mobile.remotezip.ArchiveEntryIdentity
 import com.romulus.mobile.source.browse.ArchivePreparationKey
 import com.romulus.mobile.source.browse.SelectableItemId
+import com.romulus.mobile.source.snapshot.ExtractionLayoutMode
+import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
 import java.io.File
@@ -171,8 +174,11 @@ class ArchiveEntryAttemptRunnerTest {
                         applyRename = false,
                         renameRule = null
                     ),
-                    unarchiveIntent = false,
-                    recursiveUnarchiveIntent = false,
+                    unarchiveIntent = QueueUnarchiveIntent(
+                        enabled = false,
+                        recursive = false,
+                        layout = ExtractionLayoutPolicy(mode = ExtractionLayoutMode.FLAT)
+                    ),
                     storageTarget = StorageTargetContext(subfolder = "archive"),
                     executionContext = QueueExecutionContext.ArchiveEntry(
                         preparationKey = ArchivePreparationKey(
@@ -549,8 +555,11 @@ class ArchiveEntryAttemptRunnerTest {
                         applyRename = false,
                         renameRule = null
                     ),
-                    unarchiveIntent = unarchiveIntent,
-                    recursiveUnarchiveIntent = recursiveUnarchiveIntent,
+                    unarchiveIntent = QueueUnarchiveIntent(
+                        enabled = unarchiveIntent,
+                        recursive = unarchiveIntent && recursiveUnarchiveIntent,
+                        layout = ExtractionLayoutPolicy(mode = ExtractionLayoutMode.FLAT)
+                    ),
                     storageTarget = StorageTargetContext(subfolder = "archive"),
                     executionContext = QueueExecutionContext.ArchiveEntry(
                         preparationKey = ArchivePreparationKey(

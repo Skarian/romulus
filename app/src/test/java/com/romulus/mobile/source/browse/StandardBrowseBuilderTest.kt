@@ -1,10 +1,13 @@
 package com.romulus.mobile.source.browse
 
 import com.romulus.mobile.source.ingest.RenameRule
+import com.romulus.mobile.source.snapshot.ExtractionLayoutMode
+import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
 import com.romulus.mobile.source.snapshot.SourceSnapshotEntry
 import com.romulus.mobile.source.snapshot.SourceTorrentRef
+import com.romulus.mobile.source.snapshot.UnarchivePolicy
 import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
 import com.romulus.mobile.source.torrentmeta.TorrentMetadataFileRecord
 import com.romulus.mobile.source.torrentmeta.TorrentMetadataInventory
@@ -53,10 +56,10 @@ class StandardBrowseBuilderTest {
                 normalizedPath = "/shows/",
                 ignoreGlobs = listOf("*.srt"),
                 renameRule = RenameRule(pattern = "(.*)", replacement = "$1"),
-                unarchiveConfigured = true,
-                unarchiveDefault = false,
-                recursiveConfigured = true,
-                recursiveUnarchiveDefault = true
+                unarchivePolicy = UnarchivePolicy(
+                    recursiveDefault = true,
+                    layout = ExtractionLayoutPolicy(mode = ExtractionLayoutMode.FLAT)
+                )
             )
         )
 
@@ -103,10 +106,7 @@ class StandardBrowseBuilderTest {
                 normalizedPath = "/shows/",
                 ignoreGlobs = emptyList(),
                 renameRule = null,
-                unarchiveConfigured = false,
-                unarchiveDefault = false,
-                recursiveConfigured = false,
-                recursiveUnarchiveDefault = false
+                unarchivePolicy = null
             )
         ) as BrowseResult.Loaded
 

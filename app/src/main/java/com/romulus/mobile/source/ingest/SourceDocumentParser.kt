@@ -31,8 +31,7 @@ internal data class SourceEntryDocument(
     val path: String? = null,
     val ignore: IgnoreRulesDocument? = null,
     val rename: RenameRule? = null,
-    val unarchive: Boolean? = null,
-    val recursiveUnarchive: Boolean? = null
+    val unarchive: UnarchiveDocument? = null
 )
 
 @Serializable

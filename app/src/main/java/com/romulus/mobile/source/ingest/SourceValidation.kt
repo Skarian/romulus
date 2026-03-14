@@ -30,20 +30,29 @@ internal class SourceValidation {
                 }
             }
 
-            if (entry.recursiveUnarchive != null && entry.unarchive != true) {
-                issues += SourceValidationIssue.InvalidRecursiveUnarchive(
-                    "Recursive unarchive requires unarchive=true."
+            entry.unarchive?.layout?.rename?.let { renameRule ->
+                val validationIssue = validateRenameRule(
+                    renameRule = renameRule,
+                    missingMessage = DEDICATED_FOLDER_RENAME_REQUIRED_MESSAGE,
+                    invalidPatternPrefix = DEDICATED_FOLDER_RENAME_INVALID_PREFIX
                 )
+                if (validationIssue != null) {
+                    issues += validationIssue
+                }
             }
         }
 
         return issues
     }
 
-    private fun validateRenameRule(renameRule: RenameRule): SourceValidationIssue? {
+    private fun validateRenameRule(
+        renameRule: RenameRule,
+        missingMessage: String = "Rename rule requires both pattern and replacement.",
+        invalidPatternPrefix: String = "Rename pattern is invalid"
+    ): SourceValidationIssue? {
         if (renameRule.pattern.trim().isBlank() || renameRule.replacement.trim().isBlank()) {
             return SourceValidationIssue.InvalidRenameRule(
-                "Rename rule requires both pattern and replacement."
+                missingMessage
             )
         }
         return runCatching {
@@ -52,7 +61,8 @@ internal class SourceValidation {
             onSuccess = { null },
             onFailure = { error ->
                 SourceValidationIssue.InvalidRenameRule(
-                    error.message ?: "Rename pattern is invalid."
+                    error.message?.let { "$invalidPatternPrefix: $it" }
+                        ?: "$invalidPatternPrefix."
                 )
             }
         )
@@ -60,5 +70,9 @@ internal class SourceValidation {
 
     private companion object {
         const val SUPPORTED_VERSION = 1
+        const val DEDICATED_FOLDER_RENAME_REQUIRED_MESSAGE =
+            "Dedicated-folder rename rule requires both pattern and replacement."
+        const val DEDICATED_FOLDER_RENAME_INVALID_PREFIX =
+            "Dedicated-folder rename pattern is invalid"
     }
 }

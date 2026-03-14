@@ -6,10 +6,13 @@ import com.romulus.mobile.remotezip.ArchiveEntryDescriptor
 import com.romulus.mobile.remotezip.ArchiveEntryIdentity
 import com.romulus.mobile.remotezip.EnumeratedRemoteZip
 import com.romulus.mobile.source.ingest.RenameRule
+import com.romulus.mobile.source.snapshot.ExtractionLayoutMode
+import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
 import com.romulus.mobile.source.snapshot.SourceSnapshotEntry
 import com.romulus.mobile.source.snapshot.SourceTorrentRef
+import com.romulus.mobile.source.snapshot.UnarchivePolicy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -56,10 +59,10 @@ class ArchiveBrowseBuilderTest {
                 normalizedPath = "/Show/archive.zip",
                 ignoreGlobs = listOf("*.pdf"),
                 renameRule = RenameRule("(.*)", "$1"),
-                unarchiveConfigured = true,
-                unarchiveDefault = true,
-                recursiveConfigured = true,
-                recursiveUnarchiveDefault = false
+                unarchivePolicy = UnarchivePolicy(
+                    recursiveDefault = false,
+                    layout = ExtractionLayoutPolicy(mode = ExtractionLayoutMode.FLAT)
+                )
             )
         ) as BrowseResult.Loaded
 
@@ -88,10 +91,7 @@ class ArchiveBrowseBuilderTest {
                 normalizedPath = "/Show/archive.zip",
                 ignoreGlobs = emptyList(),
                 renameRule = null,
-                unarchiveConfigured = false,
-                unarchiveDefault = false,
-                recursiveConfigured = false,
-                recursiveUnarchiveDefault = false
+                unarchivePolicy = null
             )
         )
 
@@ -123,10 +123,7 @@ class ArchiveBrowseBuilderTest {
                 normalizedPath = "/Show/archive.zip",
                 ignoreGlobs = emptyList(),
                 renameRule = null,
-                unarchiveConfigured = false,
-                unarchiveDefault = false,
-                recursiveConfigured = false,
-                recursiveUnarchiveDefault = false
+                unarchivePolicy = null
             )
         )
 

@@ -11,6 +11,7 @@ import com.romulus.mobile.source.InstantAsEpochMilliSerializer
 import com.romulus.mobile.source.browse.ArchivePreparationKey
 import com.romulus.mobile.source.browse.SelectableItemId
 import com.romulus.mobile.source.ingest.RenameRule
+import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
 import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
@@ -35,6 +36,13 @@ data class NamingIntent(val applyRename: Boolean, val renameRule: RenameRule?)
 data class StorageTargetContext(val subfolder: String)
 
 @Serializable
+data class QueueUnarchiveIntent(
+    val enabled: Boolean,
+    val recursive: Boolean,
+    val layout: ExtractionLayoutPolicy
+)
+
+@Serializable
 sealed interface QueueExecutionContext {
     @Serializable
     data class StandardFile(val selectionIntent: TorrentFileSelectionIntent) : QueueExecutionContext
@@ -55,8 +63,7 @@ data class QueueTaskInput(
     val originalSizeBytes: Long?,
     val sourceMetadata: SourceQueueMetadata,
     val namingIntent: NamingIntent,
-    val unarchiveIntent: Boolean,
-    val recursiveUnarchiveIntent: Boolean,
+    val unarchiveIntent: QueueUnarchiveIntent,
     val storageTarget: StorageTargetContext,
     val executionContext: QueueExecutionContext
 )
@@ -73,8 +80,7 @@ data class QueueTask(
     val originalSizeBytes: Long?,
     val sourceMetadata: SourceQueueMetadata,
     val namingIntent: NamingIntent,
-    val unarchiveIntent: Boolean,
-    val recursiveUnarchiveIntent: Boolean,
+    val unarchiveIntent: QueueUnarchiveIntent,
     val storageTarget: StorageTargetContext,
     val executionContext: QueueExecutionContext
 )

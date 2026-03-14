@@ -54,12 +54,17 @@ class SourceValidationTest {
                         displayName = "Movies",
                         subfolder = "movies",
                         torrents = listOf(SourceTorrentDocument(url = "magnet:?xt=urn:btih:one")),
-                        recursiveUnarchive = true
+                        unarchive = UnarchiveDocument(
+                            layout = UnarchiveLayoutDocument(
+                                mode = UnarchiveLayoutModeDocument.DEDICATED_FOLDER,
+                                rename = RenameRule(pattern = "[", replacement = "folder")
+                            )
+                        )
                     )
                 )
             )
         )
 
-        assertTrue(issues.any { it is SourceValidationIssue.InvalidRecursiveUnarchive })
+        assertTrue(issues.any { it is SourceValidationIssue.InvalidRenameRule })
     }
 }

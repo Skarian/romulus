@@ -160,7 +160,7 @@ class SetupViewModel(
                 "Invalid ignore rule ${firstIssue.pattern}."
 
             is SourceValidationIssue.InvalidRenameRule -> firstIssue.message
-            is SourceValidationIssue.InvalidRecursiveUnarchive -> firstIssue.message
+            is SourceValidationIssue.InvalidUnarchiveRule -> firstIssue.message
         }
         return "${result.message} $issueMessage"
     }

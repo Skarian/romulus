@@ -242,7 +242,9 @@ class DownloadsFacade internal constructor(
                 executionControlRegistry = executionControlRegistry,
                 standardAttemptRunner = StandardAttemptRunner(
                     providerGateway = providerGateway,
-                    downloadTransport = OkHttpDownloadTransport(okhttp3.OkHttpClient()),
+                    downloadTransport = OkHttpDownloadTransport(
+                        OkHttpDownloadTransport.createClient()
+                    ),
                     outputReservationService = outputReservationService,
                     outputFinalizer = OutputFinalizer(
                         reservationService = outputReservationService,

@@ -362,5 +362,5 @@ internal fun SourceValidationIssue.toSettingsFeedbackMessage(): String = when (t
     is SourceValidationIssue.InvalidPath -> "Invalid path: $path."
     is SourceValidationIssue.InvalidIgnoreRule -> "Invalid ignore rule: $pattern."
     is SourceValidationIssue.InvalidRenameRule -> message
-    is SourceValidationIssue.InvalidRecursiveUnarchive -> message
+    is SourceValidationIssue.InvalidUnarchiveRule -> message
 }

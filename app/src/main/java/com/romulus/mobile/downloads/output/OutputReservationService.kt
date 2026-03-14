@@ -2,7 +2,8 @@
     "ChainMethodContinuation",
     "ClassSignature",
     "RedundantSuspendModifier",
-    "ReturnCount"
+    "ReturnCount",
+    "TooManyFunctions"
 )
 
 package com.romulus.mobile.downloads.output
@@ -10,6 +11,8 @@ package com.romulus.mobile.downloads.output
 import com.romulus.mobile.downloads.queue.FinalizationCursor
 import com.romulus.mobile.downloads.queue.QueueTask
 import com.romulus.mobile.downloads.queue.TransferCheckpoint
+import com.romulus.mobile.source.ingest.RenameRule
+import com.romulus.mobile.source.snapshot.ExtractionLayoutMode
 import java.io.File
 import java.util.UUID
 
@@ -85,12 +88,19 @@ internal class OutputReservationService(
                 originalDisplayName = task.originalDisplayName,
                 tempArtifactPath = tempArtifact.absolutePath,
                 extractionRootPath = extractionRoot.absolutePath,
-                handling = handling
+                handling = handling,
+                extractionLayout = task.unarchiveIntent.layout.takeIf {
+                    handling == ReservedArtifactHandling.LOCAL_UNARCHIVE
+                },
+                resolvedExtractionDirectory = task.resolveExtractionDirectory(
+                    occupiedRelativePaths = occupiedRelativePaths,
+                    handling = handling
+                )
             ),
             directOutput = if (handling == ReservedArtifactHandling.DIRECT_SAVE) {
                 val preferredDisplayName = task.preferredOutputName()
                 val relativePath = resolveRelativePath(
-                    subfolder = task.storageTarget.subfolder,
+                    baseRelativeDirectory = task.storageTarget.subfolder,
                     preferredFileName = preferredDisplayName,
                     occupiedRelativePaths = occupiedRelativePaths
                 )
@@ -132,7 +142,7 @@ internal class OutputReservationService(
                     renameEligible = entryPath.renameEligible
                 )
                 val relativePath = resolveRelativePath(
-                    subfolder = task.storageTarget.subfolder,
+                    baseRelativeDirectory = reservation.resolvedExtractionDirectory(),
                     preferredFileName = preferredFileName,
                     occupiedRelativePaths = occupiedPaths
                 )
@@ -190,11 +200,11 @@ internal class OutputReservationService(
     }
 
     private fun resolveRelativePath(
-        subfolder: String,
+        baseRelativeDirectory: String,
         preferredFileName: String,
         occupiedRelativePaths: Set<String>
     ): String {
-        val relativeDirectory = subfolder.trim().trim('/')
+        val relativeDirectory = baseRelativeDirectory.trim().trim('/')
         val baseRelativePath = listOf(relativeDirectory, preferredFileName)
             .filter(String::isNotBlank)
             .joinToString("/")
@@ -250,11 +260,84 @@ internal class OutputReservationService(
     }
 
     private fun QueueTask.reservedArtifactHandling(): ReservedArtifactHandling =
-        if (unarchiveIntent && outputFilesystem.isSupportedArchive(originalDisplayName)) {
+        if (unarchiveIntent.enabled && outputFilesystem.isSupportedArchive(originalDisplayName)) {
             ReservedArtifactHandling.LOCAL_UNARCHIVE
         } else {
             ReservedArtifactHandling.DIRECT_SAVE
         }
+
+    private fun QueueTask.resolveExtractionDirectory(
+        occupiedRelativePaths: Set<String>,
+        handling: ReservedArtifactHandling
+    ): String? {
+        if (handling != ReservedArtifactHandling.LOCAL_UNARCHIVE) {
+            return null
+        }
+        val baseSubfolder = storageTarget.subfolder.trim().trim('/')
+        return when (unarchiveIntent.layout.mode) {
+            ExtractionLayoutMode.FLAT -> baseSubfolder
+            ExtractionLayoutMode.DEDICATED_FOLDER -> resolveRelativeDirectory(
+                subfolder = baseSubfolder,
+                preferredDirectoryName = preferredExtractionDirectoryName(),
+                occupiedRelativePaths = occupiedRelativePaths
+            )
+        }
+    }
+
+    private fun QueueTask.preferredExtractionDirectoryName(): String {
+        val archiveStem = originalDisplayName
+            .substringBeforeLast('.', originalDisplayName)
+            .ifBlank { "archive" }
+        val renameRule = unarchiveIntent.layout.folderRenameRule
+        return if (renameRule != null) {
+            renameWithRule(
+                input = archiveStem,
+                renameRule = renameRule
+            ).ifBlank { archiveStem }
+        } else {
+            archiveStem
+        }
+    }
+
+    private fun resolveRelativeDirectory(
+        subfolder: String,
+        preferredDirectoryName: String,
+        occupiedRelativePaths: Set<String>
+    ): String {
+        val relativeDirectory = subfolder.trim().trim('/')
+        val baseRelativePath = listOf(relativeDirectory, preferredDirectoryName)
+            .filter(String::isNotBlank)
+            .joinToString("/")
+        if (!baseRelativePath.conflictsWithOccupiedPaths(occupiedRelativePaths)) {
+            return baseRelativePath
+        }
+        var collisionIndex = 1
+        while (true) {
+            val candidateRelativePath = listOf(
+                relativeDirectory,
+                "$preferredDirectoryName ($collisionIndex)"
+            ).filter(String::isNotBlank).joinToString("/")
+            if (!candidateRelativePath.conflictsWithOccupiedPaths(occupiedRelativePaths)) {
+                return candidateRelativePath
+            }
+            collisionIndex += 1
+        }
+    }
+
+    private fun renameWithRule(input: String, renameRule: RenameRule): String = runCatching {
+        Regex(renameRule.pattern).replace(input, renameRule.replacement)
+    }.getOrDefault(input)
+
+    private fun String.conflictsWithOccupiedPaths(occupiedRelativePaths: Set<String>): Boolean {
+        if (this in occupiedRelativePaths) {
+            return true
+        }
+        val prefix = "$this/"
+        return occupiedRelativePaths.any { path -> path.startsWith(prefix) }
+    }
+
+    private fun OutputReservation.resolvedExtractionDirectory(): String =
+        artifact.resolvedExtractionDirectory.orEmpty()
 }
 
 private fun buildTempArtifactFileName(originalDisplayName: String, reservationId: String): String {

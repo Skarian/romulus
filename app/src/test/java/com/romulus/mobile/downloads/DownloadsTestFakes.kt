@@ -23,6 +23,7 @@ import com.romulus.mobile.downloads.queue.QueueRowRecord
 import com.romulus.mobile.downloads.queue.QueueTaskState
 import com.romulus.mobile.downloads.queue.QueueTask
 import com.romulus.mobile.downloads.queue.QueueTaskInput
+import com.romulus.mobile.downloads.queue.QueueUnarchiveIntent
 import com.romulus.mobile.downloads.queue.QueueActionRequest
 import com.romulus.mobile.downloads.queue.SourceQueueMetadata
 import com.romulus.mobile.downloads.queue.StorageTargetContext
@@ -39,6 +40,8 @@ import com.romulus.mobile.downloads.work.NotificationApi
 import com.romulus.mobile.downloads.work.ProgressNotificationSnapshot
 import com.romulus.mobile.source.browse.SelectableItemId
 import com.romulus.mobile.source.ingest.RenameRule
+import com.romulus.mobile.source.snapshot.ExtractionLayoutMode
+import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
 import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
@@ -203,7 +206,8 @@ internal class FakeOutputFilesystem(
         subfolder: String
     ): Result<Set<String>> = Result.success(
         writtenOutputs.keys.filter { path ->
-            path.substringBeforeLast('/', "") == subfolder.trim().trim('/')
+            val normalizedSubfolder = subfolder.trim().trim('/')
+            path == normalizedSubfolder || path.startsWith("$normalizedSubfolder/")
         }.toSet()
     )
 
@@ -354,7 +358,10 @@ internal fun sampleQueueTaskInput(
         renameRule = null
     ),
     unarchiveIntent: Boolean = false,
-    recursiveUnarchiveIntent: Boolean = false
+    recursiveUnarchiveIntent: Boolean = false,
+    extractionLayout: ExtractionLayoutPolicy = ExtractionLayoutPolicy(
+        mode = ExtractionLayoutMode.FLAT
+    )
 ): QueueTaskInput = QueueTaskInput(
     snapshotId = SnapshotId("snapshot"),
     entryId = SourceEntryId("entry"),
@@ -367,8 +374,11 @@ internal fun sampleQueueTaskInput(
         providerFileId = "provider-file"
     ),
     namingIntent = namingIntent,
-    unarchiveIntent = unarchiveIntent,
-    recursiveUnarchiveIntent = recursiveUnarchiveIntent,
+    unarchiveIntent = QueueUnarchiveIntent(
+        enabled = unarchiveIntent,
+        recursive = unarchiveIntent && recursiveUnarchiveIntent,
+        layout = extractionLayout
+    ),
     storageTarget = StorageTargetContext(subfolder = "shows"),
     executionContext = QueueExecutionContext.StandardFile(
         selectionIntent = TorrentFileSelectionIntent(
@@ -389,13 +399,17 @@ internal fun sampleQueueTask(
         renameRule = null
     ),
     unarchiveIntent: Boolean = false,
-    recursiveUnarchiveIntent: Boolean = false
+    recursiveUnarchiveIntent: Boolean = false,
+    extractionLayout: ExtractionLayoutPolicy = ExtractionLayoutPolicy(
+        mode = ExtractionLayoutMode.FLAT
+    )
 ): QueueTask {
     val input = sampleQueueTaskInput(
         name = name,
         namingIntent = namingIntent,
         unarchiveIntent = unarchiveIntent,
-        recursiveUnarchiveIntent = recursiveUnarchiveIntent
+        recursiveUnarchiveIntent = recursiveUnarchiveIntent,
+        extractionLayout = extractionLayout
     )
     return QueueTask(
         taskId = taskId,
@@ -408,7 +422,6 @@ internal fun sampleQueueTask(
         sourceMetadata = input.sourceMetadata,
         namingIntent = input.namingIntent,
         unarchiveIntent = input.unarchiveIntent,
-        recursiveUnarchiveIntent = input.recursiveUnarchiveIntent,
         storageTarget = input.storageTarget,
         executionContext = input.executionContext
     )

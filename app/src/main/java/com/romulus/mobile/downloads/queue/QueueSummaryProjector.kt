@@ -4,6 +4,7 @@ package com.romulus.mobile.downloads.queue
 
 import com.romulus.mobile.downloads.output.FinalOutputRecord
 import com.romulus.mobile.downloads.output.ReservedArtifactHandling
+import com.romulus.mobile.source.snapshot.ExtractionLayoutMode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -134,7 +135,16 @@ private fun QueueRowRecord.extractionSummary(): String {
         .coerceAtLeast(0)
         .takeIf { count -> count > 0 }
     return buildString {
-        append("Flattened extraction")
+        append(
+            when {
+                reservation?.artifact?.extractionLayout?.mode ==
+                    ExtractionLayoutMode.DEDICATED_FOLDER ->
+                    "Dedicated-folder extraction"
+                task.unarchiveIntent.layout.mode == ExtractionLayoutMode.DEDICATED_FOLDER ->
+                    "Dedicated-folder extraction"
+                else -> "Flattened extraction"
+            }
+        )
         if (fileCount != null) {
             append(" (")
             append(fileCount)
@@ -154,7 +164,7 @@ private fun QueueRowRecord.extractionSummary(): String {
 }
 
 private fun QueueTask.shouldDescribeExtraction(): Boolean =
-    unarchiveIntent && originalDisplayName.substringAfterLast('.', "").lowercase() in
+    unarchiveIntent.enabled && originalDisplayName.substringAfterLast('.', "").lowercase() in
         SUPPORTED_ARCHIVE_EXTENSIONS
 
 private fun QueueTaskState.toPresentationState(): QueuePresentationState = when (this) {

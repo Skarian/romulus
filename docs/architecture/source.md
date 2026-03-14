@@ -305,8 +305,17 @@ data class SourceEntryDocument(
     val path: String?,
     val ignore: IgnoreRulesDocument?,
     val rename: RenameRule?,
-    val unarchive: Boolean?,
-    val recursiveUnarchive: Boolean?
+    val unarchive: UnarchiveDocument?
+)
+
+data class UnarchiveDocument(
+    val recursive: Boolean = false,
+    val layout: UnarchiveLayoutDocument
+)
+
+data class UnarchiveLayoutDocument(
+    val mode: UnarchiveLayoutModeDocument,
+    val rename: RenameRule? = null
 )
 
 data class SourceDocument(
@@ -329,7 +338,7 @@ class SourceDocumentParser(
 ### `SourceValidation.kt`
 - Internal area: `source/ingest`
 - Purpose: centralize runtime validation rules that sharpen the schema.
-- Responsibility: reject invalid path scope, ignore rules, rename regex, and recursive-unarchive invariants that sharpen [`schema.json`](../schema.json) before any source update becomes active.
+- Responsibility: reject invalid path scope, ignore rules, rename regex, and dedicated-folder rename regex that sharpen [`schema.json`](../schema.json) before any source update becomes active.
 - Depends on: `SourceDocumentParser.kt`
 - Must not depend on: snapshot store or browse services
 - Visibility: `internal`
@@ -342,7 +351,7 @@ sealed interface SourceValidationIssue {
     data class InvalidPath(val path: String) : SourceValidationIssue
     data class InvalidIgnoreRule(val pattern: String) : SourceValidationIssue
     data class InvalidRenameRule(val message: String) : SourceValidationIssue
-    data class InvalidRecursiveUnarchive(val message: String) : SourceValidationIssue
+    data class InvalidUnarchiveRule(val message: String) : SourceValidationIssue
 }
 
 class SourceValidation {
@@ -352,7 +361,7 @@ class SourceValidation {
         // - path must normalize to root, directory scope, or exact `.zip`
         // - ignore globs must target basenames only
         // - rename regex must compile at acceptance time
-        // - recursiveUnarchive requires unarchive=true
+        // - dedicated-folder rename regex must compile at acceptance time
     }
 }
 ```
@@ -473,10 +482,17 @@ data class SourceSnapshotEntry(
     val normalizedPath: String,
     val ignoreGlobs: List<String>,
     val renameRule: RenameRule?,
-    val unarchiveConfigured: Boolean,
-    val unarchiveDefault: Boolean,
-    val recursiveConfigured: Boolean,
-    val recursiveUnarchiveDefault: Boolean
+    val unarchivePolicy: UnarchivePolicy?
+)
+
+data class UnarchivePolicy(
+    val recursiveDefault: Boolean,
+    val layout: ExtractionLayoutPolicy
+)
+
+data class ExtractionLayoutPolicy(
+    val mode: ExtractionLayoutMode,
+    val folderRenameRule: RenameRule? = null
 )
 
 data class SourceSnapshot(
@@ -728,10 +744,7 @@ value class SelectableItemId(val value: String)
 data class SelectionPolicy(
     val renameRule: RenameRule?,
     val renameAvailable: Boolean,
-    val unarchiveToggleVisible: Boolean,
-    val unarchiveDefault: Boolean,
-    val recursiveToggleVisible: Boolean,
-    val recursiveUnarchiveDefault: Boolean
+    val unarchivePolicy: UnarchivePolicy?
 )
 
 data class SelectableItemSourceContext(

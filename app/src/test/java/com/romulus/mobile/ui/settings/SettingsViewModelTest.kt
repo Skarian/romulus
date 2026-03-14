@@ -38,13 +38,13 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun recursiveUnarchiveValidationFeedbackUsesSourceMessage() {
-        val feedback = SourceValidationIssue.InvalidRecursiveUnarchive(
-            message = "Recursive unarchive requires unarchive to be enabled."
+    fun unarchiveValidationFeedbackUsesSourceMessage() {
+        val feedback = SourceValidationIssue.InvalidUnarchiveRule(
+            message = "Dedicated-folder rename pattern is invalid."
         ).toSettingsFeedbackMessage()
 
         assertEquals(
-            "Recursive unarchive requires unarchive to be enabled.",
+            "Dedicated-folder rename pattern is invalid.",
             feedback
         )
     }

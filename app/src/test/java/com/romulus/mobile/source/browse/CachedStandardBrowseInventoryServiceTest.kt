@@ -114,10 +114,7 @@ class CachedStandardBrowseInventoryServiceTest {
         normalizedPath = "/",
         ignoreGlobs = emptyList(),
         renameRule = null,
-        unarchiveConfigured = false,
-        unarchiveDefault = false,
-        recursiveConfigured = false,
-        recursiveUnarchiveDefault = false
+        unarchivePolicy = null
     )
 
     private fun providerFileRecord(

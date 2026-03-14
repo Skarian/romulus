@@ -18,6 +18,21 @@ value class SourceEntryId(val value: String)
 data class SourceTorrentRef(val magnetUri: String, val partLabel: String?)
 
 @Serializable
+enum class ExtractionLayoutMode {
+    FLAT,
+    DEDICATED_FOLDER
+}
+
+@Serializable
+data class ExtractionLayoutPolicy(
+    val mode: ExtractionLayoutMode,
+    val folderRenameRule: RenameRule? = null
+)
+
+@Serializable
+data class UnarchivePolicy(val recursiveDefault: Boolean, val layout: ExtractionLayoutPolicy)
+
+@Serializable
 data class SourceSnapshotEntry(
     val entryId: SourceEntryId,
     val displayName: String,
@@ -26,10 +41,7 @@ data class SourceSnapshotEntry(
     val normalizedPath: String,
     val ignoreGlobs: List<String>,
     val renameRule: RenameRule?,
-    val unarchiveConfigured: Boolean,
-    val unarchiveDefault: Boolean,
-    val recursiveConfigured: Boolean,
-    val recursiveUnarchiveDefault: Boolean
+    val unarchivePolicy: UnarchivePolicy?
 )
 
 @Serializable

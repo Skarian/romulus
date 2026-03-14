@@ -2,8 +2,10 @@ package com.romulus.mobile.source.browse
 
 import com.romulus.mobile.remotezip.ArchiveEntryIdentity
 import com.romulus.mobile.source.ingest.RenameRule
+import com.romulus.mobile.source.snapshot.ExtractionLayoutPolicy
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import com.romulus.mobile.source.snapshot.UnarchivePolicy
 import com.romulus.mobile.source.torrentmeta.TorrentFileSelectionIntent
 import kotlinx.serialization.Serializable
 
@@ -14,11 +16,13 @@ value class SelectableItemId(val value: String)
 data class SelectionPolicy(
     val renameRule: RenameRule?,
     val renameAvailable: Boolean,
-    val unarchiveToggleVisible: Boolean,
-    val unarchiveDefault: Boolean,
-    val recursiveToggleVisible: Boolean,
-    val recursiveUnarchiveDefault: Boolean
+    val unarchivePolicy: UnarchivePolicy?
 )
+
+val SelectionPolicy.defaultExtractionLayout: ExtractionLayoutPolicy
+    get() = unarchivePolicy?.layout ?: ExtractionLayoutPolicy(
+        mode = com.romulus.mobile.source.snapshot.ExtractionLayoutMode.FLAT
+    )
 
 data class SelectableItemSourceContext(
     val entryDisplayName: String,
