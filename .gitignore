@@ -16,8 +16,10 @@ skills-lock.json
 __pycache__/
 *.py[cod]
 docs/spikes/.env.local
+docs/spikes/apps/spike-5-try-all-api/.env.local
 docs/spikes/fixtures/generated/
 docs/spikes/apps/**/build/
 docs/spikes/apps/**/.gradle/
 docs/spikes/apps/**/.kotlin/
 docs/exports/
+IDEAS.md
