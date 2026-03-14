@@ -21,7 +21,8 @@ class DiagnosticsFacadeTest {
                 event = "startup",
                 outcome = "failure",
                 taskId = null,
-                message = "unwired"
+                snapshotId = null,
+                context = mapOf("message" to "unwired")
             )
         )
 

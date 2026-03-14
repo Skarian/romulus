@@ -36,8 +36,8 @@
 12. Queue summary counters remain stable across app restarts.
 13. Download row visibility metadata is persisted so rows cleared from Downloads stay hidden across app restarts; clear-history behavior follows [`downloads.md`](downloads.md).
 14. When diagnostics is enabled, diagnostics artifacts are persisted with bounded retention and rotation semantics defined in [`diagnostics.md`](diagnostics.md).
-15. `Clear diagnostics` removes diagnostics artifacts from internal diagnostics storage and removes previously exported diagnostics bundles from app-specific external diagnostics export storage.
-16. Diagnostics export bundles persist in app-specific external diagnostics export storage with retention of latest `3` until the user clears diagnostics; export behavior follows [`diagnostics.md`](diagnostics.md).
+15. `Clear diagnostics` removes retained diagnostics artifacts from internal diagnostics storage only.
+16. Diagnostics export writes one bundle to the user-selected destination returned by the Android document picker; previously exported user-owned files are not tracked or deleted by the app.
 
 ## Failure Behavior
 

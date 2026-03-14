@@ -3,13 +3,15 @@ package com.romulus.mobile.app.shell
 import com.romulus.mobile.diagnostics.DiagnosticsFacade
 import com.romulus.mobile.source.snapshot.SnapshotId
 import com.romulus.mobile.source.snapshot.SourceEntryId
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ShellNavigatorTest {
     @Test
     fun enterShellDoesNotResetExistingRoute() {
-        val navigator = ShellNavigator(DiagnosticsFacade())
+        val navigator = navigator()
 
         navigator.enterShell(ShellRoute.Home)
         navigator.selectTab(ShellRoute.Settings)
@@ -20,7 +22,7 @@ class ShellNavigatorTest {
 
     @Test
     fun launchIntentCanRouteToDownloads() {
-        val navigator = ShellNavigator(DiagnosticsFacade())
+        val navigator = navigator()
 
         navigator.acceptLaunchIntent(
             AppLaunchIntent(
@@ -34,7 +36,7 @@ class ShellNavigatorTest {
 
     @Test
     fun homeTabRestoresLastFilesRoute() {
-        val navigator = ShellNavigator(DiagnosticsFacade())
+        val navigator = navigator()
 
         navigator.enterShell(ShellRoute.Home)
         navigator.openFiles(
@@ -57,7 +59,7 @@ class ShellNavigatorTest {
 
     @Test
     fun returnToHomeRootClearsLastFilesRoute() {
-        val navigator = ShellNavigator(DiagnosticsFacade())
+        val navigator = navigator()
 
         navigator.enterShell(ShellRoute.Home)
         navigator.openFiles(
@@ -72,4 +74,9 @@ class ShellNavigatorTest {
 
         assertEquals(ShellRoute.Home, navigator.observeRoute().value)
     }
+
+    private fun navigator(): ShellNavigator = ShellNavigator(
+        diagnosticsFacade = DiagnosticsFacade(),
+        diagnosticsScope = CoroutineScope(SupervisorJob())
+    )
 }

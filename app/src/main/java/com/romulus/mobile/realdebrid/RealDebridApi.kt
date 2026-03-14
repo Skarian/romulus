@@ -1,12 +1,18 @@
 package com.romulus.mobile.realdebrid
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import com.romulus.mobile.diagnostics.DiagnosticsFacade
+import com.romulus.mobile.diagnostics.events.DiagnosticDomain
+import com.romulus.mobile.diagnostics.toDiagnosticContext
 import com.romulus.mobile.realdebrid.auth.TokenService
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.http.DELETE
@@ -122,22 +128,81 @@ internal class RetrofitRealDebridAuthClient(private val endpoints: AuthValidatio
 internal object RealDebridHttpFactory {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun createApi(tokenService: TokenService): RealDebridApi = RetrofitRealDebridApi(
-        endpoints = createRetrofit().create(AuthenticatedRealDebridEndpoints::class.java),
-        tokenService = tokenService
-    )
+    fun createApi(tokenService: TokenService, diagnosticsFacade: DiagnosticsFacade): RealDebridApi =
+        RetrofitRealDebridApi(
+            endpoints = createRetrofit(diagnosticsFacade)
+                .create(AuthenticatedRealDebridEndpoints::class.java),
+            tokenService = tokenService
+        )
 
-    fun createAuthClient(): RealDebridAuthClient = RetrofitRealDebridAuthClient(
-        endpoints = createRetrofit().create(AuthValidationEndpoints::class.java)
-    )
+    fun createAuthClient(diagnosticsFacade: DiagnosticsFacade): RealDebridAuthClient =
+        RetrofitRealDebridAuthClient(
+            endpoints = createRetrofit(diagnosticsFacade)
+                .create(AuthValidationEndpoints::class.java)
+        )
 
-    private fun createRetrofit(): Retrofit {
+    @Suppress("ChainMethodContinuation")
+    private fun createRetrofit(diagnosticsFacade: DiagnosticsFacade): Retrofit {
+        val client = OkHttpClient.Builder()
+            .addInterceptor(RealDebridDiagnosticsInterceptor(diagnosticsFacade))
+            .build()
         val builder = Retrofit.Builder()
         builder.baseUrl(BASE_URL)
-        builder.client(OkHttpClient())
+        builder.client(client)
         builder.addConverterFactory(json.asConverterFactory(JSON_MEDIA_TYPE))
         return builder.build()
     }
+}
+
+internal class RealDebridDiagnosticsInterceptor(private val diagnosticsFacade: DiagnosticsFacade) :
+    Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val startedAt = System.nanoTime()
+        return try {
+            val response = chain.proceed(request)
+            record(
+                request = request.method to request.url.encodedPath,
+                durationMillis = elapsedMillis(startedAt),
+                outcome = "succeeded",
+                extraContext = mapOf("status" to response.code.toString())
+            )
+            response
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: IOException) {
+            record(
+                request = request.method to request.url.encodedPath,
+                durationMillis = elapsedMillis(startedAt),
+                outcome = "failed",
+                extraContext = error.toDiagnosticContext()
+            )
+            throw error
+        }
+    }
+
+    private fun record(
+        request: Pair<String, String>,
+        durationMillis: Long,
+        outcome: String,
+        extraContext: Map<String, String>
+    ) {
+        runBlocking {
+            diagnosticsFacade.record(
+                domain = DiagnosticDomain.REAL_DEBRID,
+                event = "api-call",
+                outcome = outcome,
+                context = mapOf(
+                    "method" to request.first,
+                    "endpoint" to request.second,
+                    "durationMs" to durationMillis.toString()
+                ) + extraContext
+            )
+        }
+    }
+
+    private fun elapsedMillis(startedAt: Long): Long =
+        (System.nanoTime() - startedAt) / NANOS_PER_MILLISECOND
 }
 
 internal interface AuthValidationEndpoints {
@@ -193,3 +258,4 @@ private const val BASE_URL = "https://api.real-debrid.com/rest/1.0/"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 private const val HTTP_UNAUTHORIZED = 401
 private const val HTTP_FORBIDDEN = 403
+private const val NANOS_PER_MILLISECOND = 1_000_000L

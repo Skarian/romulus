@@ -4,6 +4,7 @@ import android.net.Uri
 import com.romulus.mobile.app.platform.GrantRestoreReport
 import com.romulus.mobile.app.platform.PersistedUriGrant
 import com.romulus.mobile.app.platform.UriGrantRegistry
+import com.romulus.mobile.diagnostics.DiagnosticsFacade
 import com.romulus.mobile.downloads.DownloadsFacade
 import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.source.SourceFacade
@@ -26,7 +27,8 @@ class StartupBootstrapperTest {
                 dispatcher = StandardTestDispatcher(testScheduler)
             ),
             sourceFacade = SourceFacade(),
-            downloadsFacade = DownloadsFacade()
+            downloadsFacade = DownloadsFacade(),
+            diagnosticsFacade = DiagnosticsFacade()
         )
 
         val route = bootstrapper.bootstrap(

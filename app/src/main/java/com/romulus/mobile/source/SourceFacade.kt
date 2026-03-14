@@ -1,10 +1,13 @@
 package com.romulus.mobile.source
 
 import android.app.Application
+import com.romulus.mobile.diagnostics.DiagnosticsFacade
+import com.romulus.mobile.diagnostics.events.DiagnosticDomain
 import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.source.browse.ArchiveBrowseBuilder
 import com.romulus.mobile.source.browse.ArchiveContainerPreparationService
 import com.romulus.mobile.source.browse.BrowseFailure
+import com.romulus.mobile.source.browse.BrowseMode
 import com.romulus.mobile.source.browse.BrowseRequest
 import com.romulus.mobile.source.browse.BrowseResult
 import com.romulus.mobile.source.browse.BrowseService
@@ -37,20 +40,102 @@ import okhttp3.OkHttpClient
 class SourceFacade internal constructor(
     private val acceptanceService: SourceAcceptanceService?,
     private val stateOwner: SourceStateOwner,
-    private val browseService: BrowseService?
+    private val browseService: BrowseService?,
+    private val diagnosticsFacade: DiagnosticsFacade?
 ) {
     constructor() : this(
         acceptanceService = null,
         stateOwner = ScaffoldSourceStateOwner(),
-        browseService = null
+        browseService = null,
+        diagnosticsFacade = null
     )
 
-    suspend fun accept(command: AcceptSourceCommand): AcceptSourceResult =
-        acceptanceService?.accept(command)
+    suspend fun accept(command: AcceptSourceCommand): AcceptSourceResult {
+        diagnosticsFacade?.record(
+            domain = DiagnosticDomain.SOURCE,
+            event = "accept-source",
+            outcome = "started",
+            context = mapOf("mode" to command.mode.name)
+        )
+        val result = acceptanceService?.accept(command)
             ?: AcceptSourceResult.Failed("SourceFacade is not wired yet")
+        when (result) {
+            is AcceptSourceResult.Accepted -> diagnosticsFacade?.record(
+                domain = DiagnosticDomain.SOURCE,
+                event = "accept-source",
+                outcome = "succeeded",
+                snapshotId = result.snapshotId.value,
+                context = mapOf("mode" to command.mode.name)
+            )
 
-    suspend fun refresh(trigger: SourceRefreshTrigger): SourceRefreshResult =
-        stateOwner.refresh(trigger)
+            is AcceptSourceResult.Rejected -> diagnosticsFacade?.record(
+                domain = DiagnosticDomain.SOURCE,
+                event = "accept-source",
+                outcome = "rejected",
+                context = mapOf(
+                    "mode" to command.mode.name,
+                    "issueCount" to result.issues.size.toString()
+                )
+            )
+
+            is AcceptSourceResult.Failed -> diagnosticsFacade?.record(
+                domain = DiagnosticDomain.SOURCE,
+                event = "accept-source",
+                outcome = "failed",
+                context = mapOf(
+                    "mode" to command.mode.name,
+                    "message" to result.message
+                )
+            )
+        }
+        return result
+    }
+
+    suspend fun refresh(trigger: SourceRefreshTrigger): SourceRefreshResult {
+        diagnosticsFacade?.record(
+            domain = DiagnosticDomain.HOME,
+            event = "refresh-source",
+            outcome = "started",
+            context = mapOf("trigger" to trigger.diagnosticName())
+        )
+        val result = stateOwner.refresh(trigger)
+        when (result) {
+            is SourceRefreshResult.Replaced -> diagnosticsFacade?.record(
+                domain = DiagnosticDomain.HOME,
+                event = "refresh-source",
+                outcome = "succeeded",
+                snapshotId = result.snapshotId.value,
+                context = mapOf(
+                    "trigger" to trigger.diagnosticName(),
+                    "refreshOutcome" to "replaced"
+                )
+            )
+
+            is SourceRefreshResult.RetainedPrior -> diagnosticsFacade?.record(
+                domain = DiagnosticDomain.HOME,
+                event = "refresh-source",
+                outcome = "failed",
+                snapshotId = result.priorSnapshotId.value,
+                context = mapOf(
+                    "trigger" to trigger.diagnosticName(),
+                    "refreshOutcome" to "retained-prior",
+                    "message" to result.message
+                )
+            )
+
+            is SourceRefreshResult.FailedWithoutSnapshot -> diagnosticsFacade?.record(
+                domain = DiagnosticDomain.HOME,
+                event = "refresh-source",
+                outcome = "failed",
+                context = mapOf(
+                    "trigger" to trigger.diagnosticName(),
+                    "refreshOutcome" to "failed-without-snapshot",
+                    "message" to result.message
+                )
+            )
+        }
+        return result
+    }
 
     fun observeHomeState(): StateFlow<HomeSourceState> = stateOwner.observeHomeState()
 
@@ -64,19 +149,85 @@ class SourceFacade internal constructor(
     fun observeAcceptedSourceSummary(): StateFlow<AcceptedSourceSummary?> =
         stateOwner.observeAcceptedSourceSummary()
 
-    suspend fun browse(request: BrowseRequest): BrowseResult = browseService?.load(request)
-        ?: BrowseResult.Failed(
-            BrowseFailure.StandardResolver(
-                "SourceFacade is not wired yet"
-            )
+    suspend fun browse(request: BrowseRequest): BrowseResult {
+        diagnosticsFacade?.record(
+            domain = DiagnosticDomain.FILES,
+            event = "browse",
+            outcome = "started",
+            snapshotId = request.snapshotId.value,
+            context = mapOf("entryId" to request.entryId.value)
         )
+        val result = browseService?.load(request)
+            ?: BrowseResult.Failed(
+                BrowseFailure.StandardResolver(
+                    "SourceFacade is not wired yet"
+                )
+            )
+        when (result) {
+            is BrowseResult.Loaded -> diagnosticsFacade?.record(
+                domain = if (result.mode == BrowseMode.ARCHIVE_SELECTION) {
+                    DiagnosticDomain.ARCHIVE_SELECTION
+                } else {
+                    DiagnosticDomain.FILES
+                },
+                event = "browse",
+                outcome = "succeeded",
+                snapshotId = request.snapshotId.value,
+                context = mapOf(
+                    "entryId" to request.entryId.value,
+                    "rowCount" to result.items.size.toString()
+                )
+            )
+
+            is BrowseResult.Preparing -> diagnosticsFacade?.record(
+                domain = if (result.mode == BrowseMode.ARCHIVE_SELECTION) {
+                    DiagnosticDomain.ARCHIVE_SELECTION
+                } else {
+                    DiagnosticDomain.FILES
+                },
+                event = "browse",
+                outcome = "preparing",
+                snapshotId = request.snapshotId.value,
+                context = mapOf(
+                    "entryId" to request.entryId.value,
+                    "statusLabel" to result.statusLabel.orEmpty()
+                )
+            )
+
+            is BrowseResult.Failed -> diagnosticsFacade?.record(
+                domain = DiagnosticDomain.FILES,
+                event = "browse",
+                outcome = "failed",
+                snapshotId = request.snapshotId.value,
+                context = mapOf(
+                    "entryId" to request.entryId.value,
+                    "message" to result.failure.toDiagnosticMessage()
+                )
+            )
+        }
+        return result
+    }
+
+    private fun SourceRefreshTrigger.diagnosticName(): String = when (this) {
+        SourceRefreshTrigger.HomeManualRefresh -> "HomeManualRefresh"
+        SourceRefreshTrigger.ColdLaunch -> "ColdLaunch"
+        SourceRefreshTrigger.SettingsSave -> "SettingsSave"
+    }
+
+    private fun BrowseFailure.toDiagnosticMessage(): String = when (this) {
+        is BrowseFailure.MissingEntry -> "Source entry ${entryId.value} is missing."
+        is BrowseFailure.StandardResolver -> message
+        is BrowseFailure.ArchiveResolver -> message
+        is BrowseFailure.ArchiveEnumeration -> message
+    }
 
     companion object {
         @Suppress("LongMethod")
         internal fun create(
             application: Application,
             realDebridFacade: RealDebridFacade,
-            archiveContainerPreparationService: ArchiveContainerPreparationService
+            archiveContainerPreparationService: ArchiveContainerPreparationService,
+            diagnosticsFacade: DiagnosticsFacade
         ): SourceFacade {
             val json = Json {
                 ignoreUnknownKeys = true
@@ -136,7 +287,8 @@ class SourceFacade internal constructor(
                     archiveBrowseBuilder = ArchiveBrowseBuilder(
                         loadArchiveBrowse = archiveContainerPreparationService::loadForBrowse
                     )
-                )
+                ),
+                diagnosticsFacade = diagnosticsFacade
             )
         }
     }

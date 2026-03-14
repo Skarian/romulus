@@ -1,11 +1,13 @@
 package com.romulus.mobile.ui.settings
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.romulus.mobile.app.startup.BrokenSetting
 import com.romulus.mobile.app.startup.ShellReadiness
 import com.romulus.mobile.diagnostics.DiagnosticsFacade
+import com.romulus.mobile.diagnostics.events.DiagnosticDomain
 import com.romulus.mobile.diagnostics.export.DiagnosticsClearResult
 import com.romulus.mobile.diagnostics.export.DiagnosticsExportResult
 import com.romulus.mobile.diagnostics.settings.DiagnosticsSettings
@@ -128,17 +130,39 @@ class SettingsViewModel(
 
     fun saveApiKey(candidate: String) {
         viewModelScope.launch {
+            diagnosticsFacade.record(
+                domain = DiagnosticDomain.SETTINGS,
+                event = "save-api-key",
+                outcome = "started"
+            )
             when (val result = realDebridFacade.saveValidatedToken(candidate)) {
                 TokenSaveResult.Saved -> {
                     feedbackMessage.value = null
+                    diagnosticsFacade.record(
+                        domain = DiagnosticDomain.SETTINGS,
+                        event = "save-api-key",
+                        outcome = "succeeded"
+                    )
                     mutableEffects.emit(SettingsEffect.Message("API key saved."))
                 }
 
                 is TokenSaveResult.Rejected -> {
+                    diagnosticsFacade.record(
+                        domain = DiagnosticDomain.SETTINGS,
+                        event = "save-api-key",
+                        outcome = "rejected",
+                        context = mapOf("message" to result.message)
+                    )
                     feedbackMessage.value = result.message
                 }
 
                 is TokenSaveResult.Failed -> {
+                    diagnosticsFacade.record(
+                        domain = DiagnosticDomain.SETTINGS,
+                        event = "save-api-key",
+                        outcome = "failed",
+                        context = mapOf("message" to result.message)
+                    )
                     feedbackMessage.value = result.message
                 }
             }
@@ -147,17 +171,48 @@ class SettingsViewModel(
 
     fun saveSource(command: AcceptSourceCommand) {
         viewModelScope.launch {
+            diagnosticsFacade.record(
+                domain = DiagnosticDomain.SETTINGS,
+                event = "save-source",
+                outcome = "started",
+                context = mapOf("mode" to command.mode.name)
+            )
             when (val result = sourceFacade.accept(command)) {
                 is AcceptSourceResult.Accepted -> {
                     feedbackMessage.value = null
+                    diagnosticsFacade.record(
+                        domain = DiagnosticDomain.SETTINGS,
+                        event = "save-source",
+                        outcome = "succeeded",
+                        snapshotId = result.snapshotId.value,
+                        context = mapOf("mode" to command.mode.name)
+                    )
                     mutableEffects.emit(SettingsEffect.Message("Source saved."))
                 }
 
                 is AcceptSourceResult.Rejected -> {
+                    diagnosticsFacade.record(
+                        domain = DiagnosticDomain.SETTINGS,
+                        event = "save-source",
+                        outcome = "rejected",
+                        context = mapOf(
+                            "mode" to command.mode.name,
+                            "issueCount" to result.issues.size.toString()
+                        )
+                    )
                     feedbackMessage.value = result.toSettingsFeedbackMessage()
                 }
 
                 is AcceptSourceResult.Failed -> {
+                    diagnosticsFacade.record(
+                        domain = DiagnosticDomain.SETTINGS,
+                        event = "save-source",
+                        outcome = "failed",
+                        context = mapOf(
+                            "mode" to command.mode.name,
+                            "message" to result.message
+                        )
+                    )
                     feedbackMessage.value = result.message
                 }
             }
@@ -166,10 +221,22 @@ class SettingsViewModel(
 
     fun saveDownloadSettings(draft: DownloadSettingsDraft) {
         viewModelScope.launch {
+            diagnosticsFacade.record(
+                domain = DiagnosticDomain.SETTINGS,
+                event = "save-download-settings",
+                outcome = "started",
+                context = mapOf("maxConcurrency" to draft.maxConcurrency.toString())
+            )
             val previousOutputDirectory = downloadsFacade.observeSettings().value.outputDirectoryUri
             val failure = downloadsFacade.updateSettings(draft).exceptionOrNull()
             if (failure == null) {
                 feedbackMessage.value = null
+                diagnosticsFacade.record(
+                    domain = DiagnosticDomain.SETTINGS,
+                    event = "save-download-settings",
+                    outcome = "succeeded",
+                    context = mapOf("maxConcurrency" to draft.maxConcurrency.toString())
+                )
                 mutableEffects.emit(
                     SettingsEffect.Message(
                         if (draft.outputDirectoryUri == previousOutputDirectory) {
@@ -180,6 +247,15 @@ class SettingsViewModel(
                     )
                 )
             } else {
+                diagnosticsFacade.record(
+                    domain = DiagnosticDomain.SETTINGS,
+                    event = "save-download-settings",
+                    outcome = "failed",
+                    context = mapOf(
+                        "maxConcurrency" to draft.maxConcurrency.toString(),
+                        "message" to failure.message.orEmpty()
+                    )
+                )
                 feedbackMessage.value = failure.message
             }
         }
@@ -187,6 +263,12 @@ class SettingsViewModel(
 
     fun setDiagnosticsEnabled(enabled: Boolean) {
         viewModelScope.launch {
+            diagnosticsFacade.record(
+                domain = DiagnosticDomain.SETTINGS,
+                event = "set-diagnostics-enabled",
+                outcome = "started",
+                context = mapOf("enabled" to enabled.toString())
+            )
             feedbackMessage.value = diagnosticsFacade.setEnabled(enabled).exceptionOrNull()?.message
         }
     }
@@ -207,23 +289,14 @@ class SettingsViewModel(
         }
     }
 
-    fun exportDiagnostics() {
+    fun exportDiagnostics(destinationUri: Uri, targetLabel: String) {
         viewModelScope.launch {
-            when (val result = diagnosticsFacade.export()) {
+            when (val result = diagnosticsFacade.export(destinationUri, targetLabel)) {
                 is DiagnosticsExportResult.Exported -> {
                     feedbackMessage.value = null
                     mutableEffects.emit(
                         SettingsEffect.Message(
-                            "Diagnostics exported: ${result.bundlePath.fileName}"
-                        )
-                    )
-                }
-
-                is DiagnosticsExportResult.ExportedWithRetentionFailure -> {
-                    feedbackMessage.value = result.message
-                    mutableEffects.emit(
-                        SettingsEffect.Message(
-                            "Diagnostics exported: ${result.bundlePath.fileName}"
+                            "Diagnostics exported: ${result.targetLabel}"
                         )
                     )
                 }

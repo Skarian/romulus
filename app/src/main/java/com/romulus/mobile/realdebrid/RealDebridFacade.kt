@@ -1,6 +1,7 @@
 package com.romulus.mobile.realdebrid
 
 import android.app.Application
+import com.romulus.mobile.diagnostics.DiagnosticsFacade
 import com.romulus.mobile.realdebrid.acquisition.ProviderAcquisitionPoller
 import com.romulus.mobile.realdebrid.acquisition.ProviderSelectionService
 import com.romulus.mobile.realdebrid.auth.AndroidKeystoreTokenCipher
@@ -133,17 +134,23 @@ class RealDebridFacade internal constructor(
             )
         }
 
-        fun create(application: Application): RealDebridFacade {
+        fun create(
+            application: Application,
+            diagnosticsFacade: DiagnosticsFacade
+        ): RealDebridFacade {
             val clock = Clock.systemUTC()
             val tokenService = TokenService(
                 credentialVault = SharedPreferencesCredentialVault(
                     context = application,
                     tokenCipher = AndroidKeystoreTokenCipher()
                 ),
-                authClient = RealDebridHttpFactory.createAuthClient(),
+                authClient = RealDebridHttpFactory.createAuthClient(diagnosticsFacade),
                 clock = clock
             )
-            val api = RealDebridHttpFactory.createApi(tokenService)
+            val api = RealDebridHttpFactory.createApi(
+                tokenService = tokenService,
+                diagnosticsFacade = diagnosticsFacade
+            )
             val budget = RequestBudget(clock)
             val inventoryService = TorrentInventoryService(
                 budget = budget,

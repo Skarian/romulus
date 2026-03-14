@@ -41,6 +41,7 @@ import com.romulus.mobile.downloads.config.DownloadSettingsDraft
 import com.romulus.mobile.source.ingest.AcceptSourceCommand
 import com.romulus.mobile.source.ingest.SourceMode
 import com.romulus.mobile.ui.layout.ResponsiveScreenContainer
+import java.time.Instant
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -69,6 +70,7 @@ fun SettingsScreen(
         mutableStateOf(state.downloadSettings.maxConcurrency.toFloat())
     }
     var clearDiagnosticsDialogOpen by rememberSaveable { mutableStateOf(false) }
+    var pendingDiagnosticsExportLabel by rememberSaveable { mutableStateOf("") }
     val allSettingsLocked = !state.lockState.tokenEditable &&
         !state.lockState.sourceEditable &&
         !state.lockState.downloadDirectoryEditable &&
@@ -146,6 +148,19 @@ fun SettingsScreen(
                     )
                 }
             )
+        }
+    }
+    val diagnosticsExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri == null) {
+            pendingDiagnosticsExportLabel = ""
+            return@rememberLauncherForActivityResult
+        }
+        val targetLabel = pendingDiagnosticsExportLabel.ifBlank { "diagnostics.zip" }
+        pendingDiagnosticsExportLabel = ""
+        scope.launch {
+            viewModel.exportDiagnostics(uri, targetLabel)
         }
     }
 
@@ -363,7 +378,13 @@ fun SettingsScreen(
                     Button(onClick = { clearDiagnosticsDialogOpen = true }) {
                         Text("Clear diagnostics")
                     }
-                    Button(onClick = viewModel::exportDiagnostics) {
+                    Button(
+                        onClick = {
+                            val targetLabel = buildDiagnosticsExportFileName()
+                            pendingDiagnosticsExportLabel = targetLabel
+                            diagnosticsExportLauncher.launch(targetLabel)
+                        }
+                    ) {
                         Text("Export")
                     }
                 }
@@ -401,6 +422,12 @@ fun SettingsScreen(
         )
     }
 }
+
+private fun buildDiagnosticsExportFileName(): String = "romulus-diagnostics-${
+    Instant.now().toString()
+        .replace(":", "")
+        .replace("-", "")
+}.zip"
 
 @Composable
 private fun SourceModeOption(

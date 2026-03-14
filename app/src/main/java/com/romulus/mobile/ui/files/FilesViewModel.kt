@@ -5,6 +5,8 @@ package com.romulus.mobile.ui.files
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.romulus.mobile.diagnostics.DiagnosticsFacade
+import com.romulus.mobile.diagnostics.events.DiagnosticDomain
 import com.romulus.mobile.downloads.DownloadsFacade
 import com.romulus.mobile.downloads.queue.EnqueueResult
 import com.romulus.mobile.downloads.queue.NamingIntent
@@ -72,6 +74,7 @@ class FilesViewModel(
     private val routeArgs: FilesRouteArgs,
     private val sourceFacade: SourceFacade,
     private val downloadsFacade: DownloadsFacade,
+    private val diagnosticsFacade: DiagnosticsFacade,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private data class FilesLocalState(
@@ -254,16 +257,52 @@ class FilesViewModel(
                 ids.remove(itemId)
             }
         }
+        viewModelScope.launch {
+            diagnosticsFacade.record(
+                domain = currentFilesDomain(),
+                event = "selection-changed",
+                outcome = "observed",
+                snapshotId = routeArgs.snapshotId.value,
+                context = mapOf(
+                    "entryId" to routeArgs.entryId.value,
+                    "selectedCount" to selectedIds.value.size.toString()
+                )
+            )
+        }
     }
 
     fun selectAllVisible() {
         val visibleIds = currentVisibleRows().map(SelectableRowModel::itemId)
         selectedIds.value = selectedIds.value + visibleIds
+        viewModelScope.launch {
+            diagnosticsFacade.record(
+                domain = currentFilesDomain(),
+                event = "select-all-visible",
+                outcome = "observed",
+                snapshotId = routeArgs.snapshotId.value,
+                context = mapOf(
+                    "entryId" to routeArgs.entryId.value,
+                    "selectedCount" to selectedIds.value.size.toString()
+                )
+            )
+        }
     }
 
     fun deselectVisible() {
         val visibleIds = currentVisibleRows().map(SelectableRowModel::itemId).toSet()
         selectedIds.value = selectedIds.value - visibleIds
+        viewModelScope.launch {
+            diagnosticsFacade.record(
+                domain = currentFilesDomain(),
+                event = "select-none-visible",
+                outcome = "observed",
+                snapshotId = routeArgs.snapshotId.value,
+                context = mapOf(
+                    "entryId" to routeArgs.entryId.value,
+                    "selectedCount" to selectedIds.value.size.toString()
+                )
+            )
+        }
     }
 
     fun clearSelection() {
@@ -283,7 +322,35 @@ class FilesViewModel(
 
         val normalizedPreferences = preferences.value.normalized()
         val inputs = selected.map { item -> item.toQueueTaskInput(normalizedPreferences) }
-        return downloadsFacade.enqueue(inputs)
+        val result = downloadsFacade.enqueue(inputs)
+        diagnosticsFacade.record(
+            domain = currentFilesDomain(),
+            event = "queue-selected",
+            outcome = when (result) {
+                is EnqueueResult.Enqueued,
+                is EnqueueResult.EnqueuedPendingDispatch -> "succeeded"
+                is EnqueueResult.Rejected -> "rejected"
+                is EnqueueResult.Failed -> "failed"
+            },
+            snapshotId = routeArgs.snapshotId.value,
+            context = buildMap {
+                put("entryId", routeArgs.entryId.value)
+                put("selectedCount", selected.size.toString())
+                put("applyRename", normalizedPreferences.applyRename.toString())
+                put("unarchive", normalizedPreferences.unarchiveEnabled.toString())
+                put(
+                    "recursiveUnarchive",
+                    normalizedPreferences.recursiveUnarchiveEnabled.toString()
+                )
+                when (result) {
+                    is EnqueueResult.Rejected -> put("message", result.message)
+                    is EnqueueResult.Failed -> put("message", result.message)
+                    is EnqueueResult.EnqueuedPendingDispatch -> put("message", result.message)
+                    is EnqueueResult.Enqueued -> Unit
+                }
+            }
+        )
+        return result
     }
 
     @Suppress("LongParameterList")
@@ -329,6 +396,11 @@ class FilesViewModel(
         return visibleItems.map { item ->
             item.toRowModel()
         }
+    }
+
+    private fun currentFilesDomain(): DiagnosticDomain = when (mode.value) {
+        FilesMode.STANDARD -> DiagnosticDomain.FILES
+        FilesMode.ARCHIVE_SELECTION -> DiagnosticDomain.ARCHIVE_SELECTION
     }
 
     private fun BrowseFailure.toMessage(): String = when (this) {

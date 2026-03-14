@@ -9,6 +9,8 @@
 package com.romulus.mobile.downloads
 
 import android.app.Application
+import com.romulus.mobile.diagnostics.DiagnosticsFacade
+import com.romulus.mobile.diagnostics.events.DiagnosticDomain
 import com.romulus.mobile.downloads.attempts.ArchiveEntryAttemptRunner
 import com.romulus.mobile.downloads.attempts.FacadeRemoteZipCopyGateway
 import com.romulus.mobile.downloads.attempts.OkHttpDownloadTransport
@@ -158,7 +160,8 @@ class DownloadsFacade internal constructor(
             application: Application,
             realDebridFacade: RealDebridFacade,
             remoteZipFacade: RemoteZipFacade,
-            archiveContainerPreparationService: ArchiveContainerPreparationService
+            archiveContainerPreparationService: ArchiveContainerPreparationService,
+            diagnosticsFacade: DiagnosticsFacade
         ): DownloadsFacade {
             val clock = Clock.systemUTC()
             val json = Json {
@@ -201,7 +204,8 @@ class DownloadsFacade internal constructor(
                     outputFilesystem = outputFilesystem
                 ),
                 workScheduler = workScheduler,
-                clock = clock
+                clock = clock,
+                diagnosticsFacade = diagnosticsFacade
             )
             val outputReservationService = OutputReservationService(
                 outputFilesystem = outputFilesystem,
@@ -218,6 +222,17 @@ class DownloadsFacade internal constructor(
             CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
                 summaryProjector.observeProjection().collect { projection ->
                     notificationPresenter.present(projection)
+                    diagnosticsFacade.record(
+                        domain = DiagnosticDomain.DOWNLOADS,
+                        event = "projection-updated",
+                        outcome = "observed",
+                        context = mapOf(
+                            "summaryCompleted" to projection.summary.completed.toString(),
+                            "summaryTotal" to projection.summary.total.toString(),
+                            "summaryFailed" to projection.summary.failed.toString(),
+                            "summaryCancelled" to projection.summary.cancelled.toString()
+                        )
+                    )
                 }
             }
             val workerEntryPoint = DownloadWorkerEntryPoint(

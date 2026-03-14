@@ -143,9 +143,9 @@ diagnostics/
 7. `downloads/queue` owns `DownloadLedgerStore` as the shared physical backing store for durable queue records and recovery checkpoints, with separate logical records for `QueueTask`, durable row `createdAt` and `updatedAt` metadata, `QueueTaskState`, attempt counters, retry schedule, row-visibility metadata, persisted pending live actions, queue-owned persisted `OutputReservation` and `FinalOutputRecord` data, persisted `Preparing` display metadata including start time, timeout deadline, last provider status, and last provider progress when available, local transfer checkpoints, and opaque provider-preparation resume markers used to continue polling without resetting the existing `Preparing` deadline.
 8. `downloads/output` owns `OutputFilesystem` for temp artifacts, reserved destinations, final outputs, restart cleanup, and the identity shape of reservations plus final-output records; `downloads/output` does not own the queue ledger that persists task-attached copies of those records.
 9. `realdebrid/` owns `CredentialVault` access for encrypted API token storage and masked token readback.
-10. `diagnostics/settings` owns the diagnostics-settings record in `ConfigStore` for persisted diagnostics enabled state.
+10. `diagnostics/settings` owns the persisted diagnostics enabled-state record in its shared settings store.
 11. `diagnostics/store` owns `DiagnosticsStore` for retained internal diagnostics artifacts (`manifest.json`, `timeline.jsonl`, `failures.jsonl`, `summary.json`).
-12. `diagnostics/export` owns `DiagnosticsExportFilesystem` for timestamped exported bundles in app-specific external diagnostics storage, including export retention and clear cleanup.
+12. `diagnostics/export` owns `DiagnosticsExportFilesystem` for writing timestamped exported bundles into the user-selected destination returned by the Android document picker; exported files are user-owned and are not part of diagnostics clear semantics.
 
 ## 5. State Authorities
 
@@ -157,7 +157,7 @@ diagnostics/
 6. `downloads/output` is the only authority for output reservation identity, final-output identity, temp-to-final promotion, archive cleanup, and restart preconditions, but it receives queue-owned persisted reservation/output data as input rather than reading queue storage by `taskId`.
 7. `downloads/queue`, `downloads/work`, `downloads/attempts`, and `downloads/output` may exchange commands and records only through the documented seams here; none may mutate another owner's store or bypass another owner's authority.
 8. `downloads/queue` is the authority for whether active downloads exist; `ui/settings` uses that signal to decide whether normal edits are locked or owner-owned corrective changes are allowed.
-9. Sharing `ConfigStore` does not change ownership: `app/`, `source/ingest`, `downloads/config`, and `diagnostics/settings` each validate and persist only their own records.
+9. Sharing physical settings storage does not change ownership: `app/`, `source/ingest`, `downloads/config`, and `diagnostics/settings` each validate and persist only their own records.
 10. `diagnostics/store` is the only authority for retained internal diagnostics artifacts, and `diagnostics/export` is the only authority for exported-bundle retention and clear cleanup.
 11. `diagnostics/` is append-only from the perspective of the product flow; product packages may emit events, but they do not read diagnostics to drive product decisions.
 

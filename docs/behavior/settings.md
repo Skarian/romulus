@@ -35,12 +35,13 @@
 15. `Clear diagnostics` requires confirmation before changes are applied.
 16. Diagnostics actions remain available while downloads are active.
 17. `Clear diagnostics` and `Export` show toast feedback on success or failure.
-18. Diagnostics data, retention, and export semantics follow [`diagnostics.md`](diagnostics.md).
-19. Saving an API key performs live Real-Debrid validation.
-20. API key save succeeds only when the new key validates successfully and replaces the prior saved key.
-21. If API key validation fails, the previously saved valid key remains unchanged.
-22. Cancelling source reselection or download-directory reselection leaves the previously saved value unchanged.
-23. When diagnostics is enabled, Settings events are captured:
+18. `Export` opens the Android system document picker so the user chooses where the diagnostics zip will be saved.
+19. Diagnostics data, retention, and export semantics follow [`diagnostics.md`](diagnostics.md).
+20. Saving an API key performs live Real-Debrid validation.
+21. API key save succeeds only when the new key validates successfully and replaces the prior saved key.
+22. If API key validation fails, the previously saved valid key remains unchanged.
+23. Cancelling source reselection, download-directory reselection, or diagnostics export destination selection leaves the previously saved values and retained diagnostics artifacts unchanged.
+24. When diagnostics is enabled, Settings events are captured:
    - settings edit and save attempts,
    - settings save outcomes,
    - diagnostics control actions and outcomes.

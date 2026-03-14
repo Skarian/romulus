@@ -12,7 +12,9 @@ import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.remotezip.RemoteZipFacade
 import com.romulus.mobile.source.SourceFacade
 import com.romulus.mobile.source.browse.ArchiveContainerPreparationService
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 data class AppGraph(
     val startupBootstrapper: StartupBootstrapper,
@@ -29,10 +31,13 @@ data class AppGraph(
     val diagnosticsFacade: DiagnosticsFacade
 ) {
     companion object {
-        @Suppress("InjectDispatcher")
+        @Suppress("InjectDispatcher", "LongMethod")
         fun create(application: Application): AppGraph {
-            val diagnosticsFacade = DiagnosticsFacade()
-            val realDebridFacade = RealDebridFacade.create(application)
+            val diagnosticsFacade = DiagnosticsFacade.create(application)
+            val realDebridFacade = RealDebridFacade.create(
+                application = application,
+                diagnosticsFacade = diagnosticsFacade
+            )
             val remoteZipFacade = RemoteZipFacade.create()
             val archiveContainerPreparationService = ArchiveContainerPreparationService.create(
                 application = application,
@@ -42,13 +47,15 @@ data class AppGraph(
             val sourceFacade = SourceFacade.create(
                 application = application,
                 realDebridFacade = realDebridFacade,
-                archiveContainerPreparationService = archiveContainerPreparationService
+                archiveContainerPreparationService = archiveContainerPreparationService,
+                diagnosticsFacade = diagnosticsFacade
             )
             val downloadsFacade = DownloadsFacade.create(
                 application = application,
                 realDebridFacade = realDebridFacade,
                 remoteZipFacade = remoteZipFacade,
-                archiveContainerPreparationService = archiveContainerPreparationService
+                archiveContainerPreparationService = archiveContainerPreparationService,
+                diagnosticsFacade = diagnosticsFacade
             )
             val setupStateStore: SetupStateStore = SharedPreferencesSetupStateStore(application)
             val uriGrantRegistry = AndroidUriGrantRegistry(application)
@@ -65,7 +72,8 @@ data class AppGraph(
                     uriGrantRegistry = uriGrantRegistry,
                     appReadinessCoordinator = appReadinessCoordinator,
                     sourceFacade = sourceFacade,
-                    downloadsFacade = downloadsFacade
+                    downloadsFacade = downloadsFacade,
+                    diagnosticsFacade = diagnosticsFacade
                 ),
                 appReadinessCoordinator = appReadinessCoordinator,
                 setupSubmissionCoordinator = SetupSubmissionCoordinator(
@@ -74,7 +82,10 @@ data class AppGraph(
                     downloadsFacade = downloadsFacade,
                     setupStateStore = setupStateStore
                 ),
-                shellNavigator = ShellNavigator(diagnosticsFacade),
+                shellNavigator = ShellNavigator(
+                    diagnosticsFacade = diagnosticsFacade,
+                    diagnosticsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+                ),
                 uriGrantRegistry = uriGrantRegistry,
                 notificationDeepLinkHandler = NotificationDeepLinkHandler(),
                 notificationPermissionRequester = NotificationPermissionRequester(),

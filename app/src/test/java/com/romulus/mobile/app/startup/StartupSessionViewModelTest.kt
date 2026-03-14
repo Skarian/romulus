@@ -5,6 +5,7 @@ import com.romulus.mobile.app.platform.GrantRestoreReport
 import com.romulus.mobile.app.platform.PersistedUriGrant
 import com.romulus.mobile.app.platform.UriGrantRegistry
 import com.romulus.mobile.app.shell.ShellRoute
+import com.romulus.mobile.diagnostics.DiagnosticsFacade
 import com.romulus.mobile.downloads.DownloadsFacade
 import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.source.SourceFacade
@@ -114,7 +115,8 @@ class StartupSessionViewModelTest {
                 dispatcher = StandardTestDispatcher()
             ),
             sourceFacade = SourceFacade(),
-            downloadsFacade = DownloadsFacade()
+            downloadsFacade = DownloadsFacade(),
+            diagnosticsFacade = DiagnosticsFacade()
         )
 }
 

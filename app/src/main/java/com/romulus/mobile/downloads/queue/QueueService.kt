@@ -9,6 +9,8 @@
 
 package com.romulus.mobile.downloads.queue
 
+import com.romulus.mobile.diagnostics.DiagnosticsFacade
+import com.romulus.mobile.diagnostics.events.DiagnosticDomain
 import com.romulus.mobile.downloads.attempts.AttemptOutcome
 import com.romulus.mobile.downloads.output.OutputCleanupScope
 import com.romulus.mobile.downloads.output.OutputCleanupService
@@ -27,7 +29,8 @@ internal class QueueService(
     private val executionControlRegistry: ExecutionControlRegistry,
     private val outputCleanupService: OutputCleanupService,
     private val workScheduler: WorkScheduler,
-    private val clock: Clock
+    private val clock: Clock,
+    private val diagnosticsFacade: DiagnosticsFacade? = null
 ) {
     suspend fun enqueue(inputs: List<QueueTaskInput>): EnqueueResult {
         if (inputs.isEmpty()) {
@@ -53,7 +56,7 @@ internal class QueueService(
             )
         }
 
-        return ledgerStore.insertTasks(tasks).fold(
+        val result = ledgerStore.insertTasks(tasks).fold(
             onSuccess = {
                 workScheduler.requestWake(WorkWakeReason.ENQUEUE).fold(
                     onSuccess = { EnqueueResult.Enqueued(tasks.map(QueueTask::taskId)) },
@@ -70,15 +73,36 @@ internal class QueueService(
                 EnqueueResult.Failed(throwable.message ?: "Queue insert failed")
             }
         )
+        diagnosticsFacade?.record(
+            domain = DiagnosticDomain.DOWNLOADS,
+            event = "enqueue",
+            outcome = when (result) {
+                is EnqueueResult.Enqueued,
+                is EnqueueResult.EnqueuedPendingDispatch -> "succeeded"
+                is EnqueueResult.Rejected -> "rejected"
+                is EnqueueResult.Failed -> "failed"
+            },
+            context = buildMap {
+                put("selectedCount", inputs.size.toString())
+                when (result) {
+                    is EnqueueResult.Rejected -> put("message", result.message)
+                    is EnqueueResult.Failed -> put("message", result.message)
+                    is EnqueueResult.EnqueuedPendingDispatch -> put("message", result.message)
+                    is EnqueueResult.Enqueued -> Unit
+                }
+            }
+        )
+        return result
     }
 
+    @Suppress("LongMethod")
     suspend fun performAction(command: QueueActionCommand): Result<Unit> {
         val row = ledgerStore.readRow(command.taskId)
             ?: return Result.failure(
                 IllegalStateException("Unknown task ${command.taskId.value}")
             )
 
-        return when (command) {
+        val result = when (command) {
             is QueueActionCommand.Pause -> when (row.state) {
                 is QueueTaskState.Running -> ledgerStore.persistActionRequest(
                     command.taskId,
@@ -126,6 +150,17 @@ internal class QueueService(
                 onFailure = { throwable -> Result.failure(throwable) }
             )
         }
+        diagnosticsFacade?.record(
+            domain = DiagnosticDomain.DOWNLOADS,
+            event = "queue-action",
+            outcome = if (result.isSuccess) "succeeded" else "failed",
+            taskId = command.taskId.value,
+            context = buildMap {
+                put("action", command.actionName())
+                result.exceptionOrNull()?.message?.let { put("message", it) }
+            }
+        )
+        return result
     }
 
     suspend fun clearHistory(includeFailed: Boolean): Result<Unit> {
@@ -144,7 +179,18 @@ internal class QueueService(
         if (taskIds.isEmpty()) {
             return Result.success(Unit)
         }
-        return ledgerStore.hideTerminalRowsAtomically(taskIds)
+        val result = ledgerStore.hideTerminalRowsAtomically(taskIds)
+        diagnosticsFacade?.record(
+            domain = DiagnosticDomain.DOWNLOADS,
+            event = "clear-history",
+            outcome = if (result.isSuccess) "succeeded" else "failed",
+            context = buildMap {
+                put("includeFailed", includeFailed.toString())
+                put("clearedCount", taskIds.size.toString())
+                result.exceptionOrNull()?.message?.let { put("message", it) }
+            }
+        )
+        return result
     }
 
     suspend fun claimRunnableTasks(now: Instant, limit: Int): List<QueueClaim> =
@@ -216,19 +262,60 @@ internal class QueueService(
     )
 
     suspend fun recordPreparing(taskId: TaskId, metadata: PreparingMetadata): Result<Unit> =
-        ledgerStore.persistState(taskId, QueueTaskState.Preparing(metadata))
+        ledgerStore.persistState(taskId, QueueTaskState.Preparing(metadata)).onSuccess {
+            diagnosticsFacade?.record(
+                domain = DiagnosticDomain.DOWNLOADS,
+                event = "state-transition",
+                outcome = "observed",
+                taskId = taskId.value,
+                context = buildMap {
+                    put("state", "Preparing")
+                    metadata.lastProviderStatus?.let { put("providerStatus", it) }
+                    metadata.lastProviderProgress?.let {
+                        put("providerProgressPercent", it.toString())
+                    }
+                }
+            )
+        }
 
     suspend fun recordRunning(taskId: TaskId, checkpoint: TransferCheckpoint): Result<Unit> =
-        ledgerStore.persistState(taskId, QueueTaskState.Running(checkpoint))
+        ledgerStore.persistState(taskId, QueueTaskState.Running(checkpoint)).onSuccess {
+            diagnosticsFacade?.record(
+                domain = DiagnosticDomain.DOWNLOADS,
+                event = "state-transition",
+                outcome = "observed",
+                taskId = taskId.value,
+                context = mapOf(
+                    "state" to "Running",
+                    "downloadedBytes" to checkpoint.downloadedBytes.toString()
+                )
+            )
+        }
 
     suspend fun acknowledgePause(taskId: TaskId, checkpoint: TransferCheckpoint): Result<Unit> =
-        ledgerStore.acknowledgeStop(taskId, checkpoint)
+        ledgerStore.acknowledgeStop(taskId, checkpoint).onSuccess {
+            diagnosticsFacade?.record(
+                domain = DiagnosticDomain.DOWNLOADS,
+                event = "state-transition",
+                outcome = "observed",
+                taskId = taskId.value,
+                context = mapOf("state" to "Paused")
+            )
+        }
 
     suspend fun acknowledgeCancel(
         taskId: TaskId,
         checkpoint: TransferCheckpoint?
     ): Result<Unit> =
-        ledgerStore.acknowledgeStop(taskId, checkpoint)
+        ledgerStore.acknowledgeStop(taskId, checkpoint).onSuccess {
+            diagnosticsFacade?.record(
+                domain = DiagnosticDomain.DOWNLOADS,
+                event = "state-transition",
+                outcome = "observed",
+                taskId = taskId.value,
+                context = mapOf("state" to "Cancelled")
+            )
+        }
 
     suspend fun settleAttemptOutcome(
         taskId: TaskId,
@@ -273,17 +360,51 @@ internal class QueueService(
                 attemptIndex = attemptIndex
             )
         ).fold(
-            onSuccess = { workScheduler.scheduleNextDeferredWake() },
+            onSuccess = {
+                diagnosticsFacade?.record(
+                    domain = DiagnosticDomain.DOWNLOADS,
+                    event = "state-transition",
+                    outcome = "observed",
+                    taskId = taskId.value,
+                    context = mapOf(
+                        "state" to "Retry Scheduled",
+                        "attemptIndex" to attemptIndex.toString()
+                    )
+                )
+                workScheduler.scheduleNextDeferredWake()
+            },
             onFailure = { throwable -> Result.failure(throwable) }
         )
 
     suspend fun complete(
         taskId: TaskId,
         outputs: List<FinalOutputRecord>
-    ): Result<Unit> = ledgerStore.completeTask(taskId, outputs)
+    ): Result<Unit> = ledgerStore.completeTask(taskId, outputs).onSuccess {
+        diagnosticsFacade?.record(
+            domain = DiagnosticDomain.DOWNLOADS,
+            event = "state-transition",
+            outcome = "observed",
+            taskId = taskId.value,
+            context = mapOf(
+                "state" to "Completed",
+                "outputCount" to outputs.size.toString()
+            )
+        )
+    }
 
     suspend fun fail(taskId: TaskId, reason: FailureReason): Result<Unit> =
-        ledgerStore.persistState(taskId, QueueTaskState.Failed(reason))
+        ledgerStore.persistState(taskId, QueueTaskState.Failed(reason)).onSuccess {
+            diagnosticsFacade?.record(
+                domain = DiagnosticDomain.DOWNLOADS,
+                event = "state-transition",
+                outcome = "failed",
+                taskId = taskId.value,
+                context = mapOf(
+                    "state" to "Failed",
+                    "message" to reason.diagnosticMessage()
+                )
+            )
+        }
 
     private suspend fun settleFailure(
         taskId: TaskId,
@@ -395,4 +516,19 @@ internal class QueueService(
         val RETRY_DELAY_SECOND: java.time.Duration = java.time.Duration.ofSeconds(15)
         val RETRY_DELAY_THIRD: java.time.Duration = java.time.Duration.ofSeconds(60)
     }
+}
+
+private fun QueueActionCommand.actionName(): String = when (this) {
+    is QueueActionCommand.Pause -> "Pause"
+    is QueueActionCommand.Resume -> "Resume"
+    is QueueActionCommand.Cancel -> "Cancel"
+    is QueueActionCommand.Retry -> "Retry"
+    is QueueActionCommand.Restart -> "Restart"
+}
+
+private fun FailureReason.diagnosticMessage(): String = when (this) {
+    is FailureReason.AuthRequired -> message
+    is FailureReason.ProviderFailure -> message
+    is FailureReason.OutputFailure -> message
+    is FailureReason.DirectoryAccessFailure -> message
 }

@@ -598,7 +598,7 @@ class SettingsViewModel(
     fun saveDownloadSettings(draft: DownloadSettingsDraft)
     fun setDiagnosticsEnabled(enabled: Boolean)
     fun clearDiagnostics()
-    fun exportDiagnostics()
+    fun exportDiagnostics(destinationUri: Uri, targetLabel: String)
 }
 ```
 

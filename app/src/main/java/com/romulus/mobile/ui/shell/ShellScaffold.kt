@@ -218,6 +218,7 @@ fun ShellScaffold(
                                     ),
                                     sourceFacade = sourceFacade,
                                     downloadsFacade = downloadsFacade,
+                                    diagnosticsFacade = diagnosticsFacade,
                                     savedStateHandle = savedStateHandle
                                 )
                             }

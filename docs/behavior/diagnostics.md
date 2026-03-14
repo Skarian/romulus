@@ -32,7 +32,8 @@
    - archive-selection,
    - downloads,
    - settings,
-   - notifications.
+   - notifications,
+   - Real-Debrid API activity.
 7. `failures.jsonl` captures failure outcomes only, with sanitized reason and context. When a task fails from `Preparing` timeout, failure context includes the last known provider status and provider progress when available.
 8. `summary.json` captures support snapshot aggregates:
    - event and failure counts by behavior domain,
@@ -56,15 +57,14 @@
 12. Diagnostics artifacts must not include plaintext credentials or sensitive tokens; redaction and masking requirements follow [`security.md`](security.md).
 13. Diagnostics storage is bounded to at most `25 MB` total with oldest-first rotation.
 14. `Clear diagnostics` shows a confirmation dialog before applying.
-15. Confirmed clear removes diagnostics artifacts from internal storage, removes previously exported diagnostics bundles from app-specific external diagnostics export storage, and shows success toast feedback.
-16. `Export diagnostics` creates a timestamped zip bundle from current diagnostics artifacts.
-17. Export bundles are written to app-specific external files diagnostics export storage for support sharing and `adb pull`.
-18. Export retention keeps only the latest `3` bundles and removes older bundles automatically.
+15. Confirmed clear removes retained diagnostics artifacts from internal storage and shows success toast feedback.
+16. `Export diagnostics` opens the Android system document picker so the user chooses the filename and destination.
+17. After the user chooses the destination, export creates a timestamped zip bundle from current diagnostics artifacts at that chosen location.
+18. `Clear diagnostics` does not delete previously exported user-owned files.
 19. `Clear diagnostics` and `Export diagnostics` are available while downloads are active.
 
 ## Failure Behavior
 
 1. Diagnostics write failures do not crash the app or block primary user flows.
-2. If `Clear diagnostics` fails, existing diagnostics artifacts and previously exported diagnostics bundles remain unchanged and app shows error toast feedback.
+2. If `Clear diagnostics` fails, existing retained diagnostics artifacts remain unchanged and app shows error toast feedback.
 3. If `Export diagnostics` fails, no partial bundle is presented as successful and app shows error toast feedback.
-4. If retention cleanup fails, newest export remains available and app shows error feedback for cleanup failure.

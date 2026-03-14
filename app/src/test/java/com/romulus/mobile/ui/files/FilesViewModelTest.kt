@@ -1,6 +1,7 @@
 package com.romulus.mobile.ui.files
 
 import androidx.lifecycle.SavedStateHandle
+import com.romulus.mobile.diagnostics.DiagnosticsFacade
 import com.romulus.mobile.downloads.DownloadsFacade
 import com.romulus.mobile.source.SourceFacade
 import com.romulus.mobile.source.browse.SelectableItem
@@ -35,6 +36,7 @@ class FilesViewModelTest {
                 ),
                 sourceFacade = SourceFacade(),
                 downloadsFacade = DownloadsFacade(),
+                diagnosticsFacade = DiagnosticsFacade(),
                 savedStateHandle = SavedStateHandle()
             )
             advanceUntilIdle()
@@ -81,6 +83,7 @@ class FilesViewModelTest {
                 ),
                 sourceFacade = SourceFacade(),
                 downloadsFacade = DownloadsFacade(),
+                diagnosticsFacade = DiagnosticsFacade(),
                 savedStateHandle = SavedStateHandle()
             )
             advanceUntilIdle()
