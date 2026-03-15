@@ -27,6 +27,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
@@ -125,6 +129,8 @@ fun ShellScaffold(
         }
 
         is StartupRouteDecision.Shell -> {
+            var downloadsScrollToTopRequest by rememberSaveable { mutableIntStateOf(0) }
+            val routeStateHolder = rememberSaveableStateHolder()
             BackHandler(enabled = route == ShellRoute.Downloads || route == ShellRoute.Settings) {
                 shellNavigator.selectTab(ShellRoute.Home)
             }
@@ -236,93 +242,100 @@ fun ShellScaffold(
                     }
                 }
             ) { innerPadding ->
-                when (route) {
-                    ShellRoute.Home -> {
-                        val homeViewModel: HomeViewModel = viewModel(
-                            factory = savedStateFactory { savedStateHandle ->
-                                HomeViewModel(
-                                    shellReadiness = shellReadiness,
-                                    sourceFacade = sourceFacade,
-                                    savedStateHandle = savedStateHandle
-                                )
-                            }
-                        )
-                        HomeScreen(
-                            viewModel = homeViewModel,
-                            onOpenFiles = { filesRoute ->
-                                shellNavigator.openFiles(
-                                    snapshotId = filesRoute.snapshotId,
-                                    entryId = filesRoute.entryId,
-                                    entryDisplayName = filesRoute.entryDisplayName
-                                )
-                            },
-                            modifier = Modifier.padding(innerPadding)
-                        )
-                    }
-
-                    is ShellRoute.Files -> {
-                        val filesRoute = route as ShellRoute.Files
-                        val filesViewModel: FilesViewModel = viewModel(
-                            key = "files:${filesRoute.snapshotId.value}:" +
-                                filesRoute.entryId.value,
-                            factory = savedStateFactory { savedStateHandle ->
-                                FilesViewModel(
-                                    routeArgs = FilesRouteArgs(
+                routeStateHolder.SaveableStateProvider(key = route.saveableKey()) {
+                    when (route) {
+                        ShellRoute.Home -> {
+                            val homeViewModel: HomeViewModel = viewModel(
+                                factory = savedStateFactory { savedStateHandle ->
+                                    HomeViewModel(
+                                        shellReadiness = shellReadiness,
+                                        sourceFacade = sourceFacade,
+                                        savedStateHandle = savedStateHandle
+                                    )
+                                }
+                            )
+                            HomeScreen(
+                                viewModel = homeViewModel,
+                                onOpenFiles = { filesRoute ->
+                                    shellNavigator.openFiles(
                                         snapshotId = filesRoute.snapshotId,
                                         entryId = filesRoute.entryId,
                                         entryDisplayName = filesRoute.entryDisplayName
-                                    ),
-                                    sourceFacade = sourceFacade,
-                                    downloadsFacade = downloadsFacade,
-                                    diagnosticsFacade = diagnosticsFacade,
-                                    savedStateHandle = savedStateHandle
-                                )
-                            }
-                        )
-                        FilesScreen(
-                            viewModel = filesViewModel,
-                            onNavigateBack = shellNavigator::returnToHomeRoot,
-                            onNavigateToDownloads = {
-                                shellNavigator.selectTab(ShellRoute.Downloads)
-                            },
-                            modifier = Modifier.padding(innerPadding)
-                        )
-                    }
+                                    )
+                                },
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
 
-                    ShellRoute.Downloads -> {
-                        val downloadsViewModel: DownloadsViewModel = viewModel(
-                            factory = savedStateFactory { savedStateHandle ->
-                                DownloadsViewModel(
-                                    downloadsFacade = downloadsFacade,
-                                    savedStateHandle = savedStateHandle
-                                )
-                            }
-                        )
-                        DownloadsScreen(
-                            viewModel = downloadsViewModel,
-                            modifier = Modifier.padding(innerPadding)
-                        )
-                    }
+                        is ShellRoute.Files -> {
+                            val filesRoute = route as ShellRoute.Files
+                            val filesViewModel: FilesViewModel = viewModel(
+                                key = "files:${filesRoute.snapshotId.value}:" +
+                                    filesRoute.entryId.value,
+                                factory = savedStateFactory { savedStateHandle ->
+                                    FilesViewModel(
+                                        routeArgs = FilesRouteArgs(
+                                            snapshotId = filesRoute.snapshotId,
+                                            entryId = filesRoute.entryId,
+                                            entryDisplayName = filesRoute.entryDisplayName
+                                        ),
+                                        sourceFacade = sourceFacade,
+                                        downloadsFacade = downloadsFacade,
+                                        diagnosticsFacade = diagnosticsFacade,
+                                        savedStateHandle = savedStateHandle
+                                    )
+                                }
+                            )
+                            FilesScreen(
+                                viewModel = filesViewModel,
+                                onNavigateBack = shellNavigator::returnToHomeRoot,
+                                onNavigateToDownloadsAndScrollToTop = {
+                                    downloadsScrollToTopRequest += 1
+                                    shellNavigator.selectTab(ShellRoute.Downloads)
+                                },
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
 
-                    ShellRoute.Settings -> {
-                        val settingsViewModel: SettingsViewModel = viewModel(
-                            factory = savedStateFactory { savedStateHandle ->
-                                SettingsViewModel(
-                                    shellReadiness = shellReadiness,
-                                    realDebridFacade = realDebridFacade,
-                                    sourceFacade = sourceFacade,
-                                    downloadsFacade = downloadsFacade,
-                                    diagnosticsFacade = diagnosticsFacade,
-                                    savedStateHandle = savedStateHandle
-                                )
-                            }
-                        )
-                        SettingsScreen(
-                            viewModel = settingsViewModel,
-                            onPersistSourceGrant = onPersistSourceGrant,
-                            onPersistOutputGrant = onPersistOutputGrant,
-                            modifier = Modifier.padding(innerPadding)
-                        )
+                        ShellRoute.Downloads -> {
+                            val downloadsViewModel: DownloadsViewModel = viewModel(
+                                factory = savedStateFactory { savedStateHandle ->
+                                    DownloadsViewModel(
+                                        downloadsFacade = downloadsFacade,
+                                        savedStateHandle = savedStateHandle
+                                    )
+                                }
+                            )
+                            DownloadsScreen(
+                                viewModel = downloadsViewModel,
+                                modifier = Modifier.padding(innerPadding),
+                                scrollToTopRequest = downloadsScrollToTopRequest,
+                                onScrollToTopHandle = {
+                                    downloadsScrollToTopRequest = 0
+                                }
+                            )
+                        }
+
+                        ShellRoute.Settings -> {
+                            val settingsViewModel: SettingsViewModel = viewModel(
+                                factory = savedStateFactory { savedStateHandle ->
+                                    SettingsViewModel(
+                                        shellReadiness = shellReadiness,
+                                        realDebridFacade = realDebridFacade,
+                                        sourceFacade = sourceFacade,
+                                        downloadsFacade = downloadsFacade,
+                                        diagnosticsFacade = diagnosticsFacade,
+                                        savedStateHandle = savedStateHandle
+                                    )
+                                }
+                            )
+                            SettingsScreen(
+                                viewModel = settingsViewModel,
+                                onPersistSourceGrant = onPersistSourceGrant,
+                                onPersistOutputGrant = onPersistOutputGrant,
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
                     }
                 }
             }
@@ -331,6 +344,13 @@ fun ShellScaffold(
 }
 
 private fun ShellRoute.isHomeLike(): Boolean = this == ShellRoute.Home || this is ShellRoute.Files
+
+private fun ShellRoute.saveableKey(): String = when (this) {
+    ShellRoute.Home -> "home"
+    is ShellRoute.Files -> "files:${snapshotId.value}:${entryId.value}"
+    ShellRoute.Downloads -> "downloads"
+    ShellRoute.Settings -> "settings"
+}
 
 private inline fun <reified T : ViewModel> savedStateFactory(
     crossinline build: (SavedStateHandle) -> T

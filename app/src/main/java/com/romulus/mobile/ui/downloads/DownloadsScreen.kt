@@ -34,6 +34,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,10 +65,16 @@ import com.romulus.mobile.ui.layout.ResponsiveScreenContainer
 import kotlinx.coroutines.flow.collect
 
 @Composable
-fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier) {
+fun DownloadsScreen(
+    viewModel: DownloadsViewModel,
+    modifier: Modifier = Modifier,
+    scrollToTopRequest: Int = 0,
+    onScrollToTopHandle: () -> Unit = {}
+) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val listState = rememberLazyListState()
+    val currentOnScrollToTopHandle by rememberUpdatedState(onScrollToTopHandle)
     val selectedDetail = remember(state.projection.rows, state.detailTaskId) {
         state.projection.rows.firstOrNull { row -> row.taskId == state.detailTaskId }
     }
@@ -76,6 +83,16 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
         viewModel.effects.collect { effect ->
             if (effect is DownloadsEffect.Message) {
                 Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest > 0) {
+            try {
+                listState.animateScrollToItem(index = 0)
+            } finally {
+                currentOnScrollToTopHandle()
             }
         }
     }

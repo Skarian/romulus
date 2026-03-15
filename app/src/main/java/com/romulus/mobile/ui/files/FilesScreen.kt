@@ -67,7 +67,7 @@ import kotlinx.coroutines.launch
 fun FilesScreen(
     viewModel: FilesViewModel,
     onNavigateBack: () -> Unit,
-    onNavigateToDownloads: () -> Unit,
+    onNavigateToDownloadsAndScrollToTop: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.state.collectAsState()
@@ -154,7 +154,7 @@ fun FilesScreen(
                                             queuedMessage(result.taskIds.size),
                                             Toast.LENGTH_SHORT
                                         ).show()
-                                        onNavigateToDownloads()
+                                        onNavigateToDownloadsAndScrollToTop()
                                     }
 
                                     is EnqueueResult.EnqueuedPendingDispatch -> {
@@ -164,7 +164,7 @@ fun FilesScreen(
                                             result.message,
                                             Toast.LENGTH_SHORT
                                         ).show()
-                                        onNavigateToDownloads()
+                                        onNavigateToDownloadsAndScrollToTop()
                                     }
 
                                     is EnqueueResult.Rejected -> {
