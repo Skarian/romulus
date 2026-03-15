@@ -3,6 +3,7 @@
 package com.romulus.mobile.ui.shell
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -117,6 +118,9 @@ fun ShellScaffold(
         }
 
         is StartupRouteDecision.Shell -> {
+            BackHandler(enabled = route == ShellRoute.Downloads || route == ShellRoute.Settings) {
+                shellNavigator.selectTab(ShellRoute.Home)
+            }
             Scaffold(
                 modifier = modifier,
                 bottomBar = {
