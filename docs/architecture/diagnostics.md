@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`diagnostics/` owns diagnostics enablement, append-only event capture, retained internal diagnostics artifacts, exported diagnostics bundles, and clear or export actions. It is a sink and reporting surface only. Product packages may emit events into it, but no product decision may depend on diagnostics content.
+`diagnostics/` owns diagnostics enablement, append-only event capture, retained internal diagnostics artifacts, user-directed exported diagnostics bundles, and clear or export actions. It is a sink and reporting surface only. Product packages may emit events into it, but no product decision may depend on diagnostics content.
 
 This package doc stays structural. The durable parts are:
 - enablement is immediate and persisted,
 - event capture is append-only while enabled,
 - retention is bounded to 25 MB internally,
-- export retains the latest 3 bundles,
+- export writes one timestamped bundle to a user-chosen destination,
 - clear and export must never partially report success,
 - diagnostics failure must not block product behavior.
 
@@ -19,8 +19,8 @@ This package doc stays structural. The durable parts are:
 - Append diagnostics events and failure records while diagnostics is enabled.
 - Maintain `manifest.json`, `timeline.jsonl`, `failures.jsonl`, and `summary.json`.
 - Rotate retained artifacts oldest-first once storage exceeds the limit.
-- Build timestamped export bundles in app-specific external storage.
-- Clear internal diagnostics artifacts and exported bundles through one diagnostics-owned action.
+- Build timestamped export bundles through the Android document picker into a user-chosen destination.
+- Clear retained internal diagnostics artifacts through one diagnostics-owned action.
 
 ## Explicit Non-Responsibilities
 
@@ -43,8 +43,8 @@ This package doc stays structural. The durable parts are:
   - Current internal artifact set.
 - `DiagnosticsExportBundle`
   - Timestamped exported bundle descriptor.
-- `StagedInternalClear` and `StagedExportClear`
-  - Diagnostics-owned staged-delete plans that allow clear to commit both internal and exported cleanup together or roll both back.
+- `StagedInternalClear`
+  - Diagnostics-owned staged-delete plan for retained internal diagnostics artifacts.
 
 ## Dependencies
 
@@ -52,9 +52,9 @@ This package doc stays structural. The durable parts are:
   - `ui/settings` for enable, clear, and export actions.
   - all product packages for best-effort `emit` calls.
 - Outbound dependencies:
-  - shared `ConfigStore` for diagnostics settings,
+  - shared diagnostics settings store,
   - internal diagnostics filesystem,
-  - app-specific external diagnostics export filesystem.
+  - Android document-provider export destination chosen by the user at export time.
 - What may cross the root-package boundary:
   - `DiagnosticsSettings`,
   - `DiagnosticEvent`,
@@ -70,7 +70,7 @@ This package doc stays structural. The durable parts are:
 - `DiagnosticsFacade.observeSettings(): StateFlow<DiagnosticsSettings>`
 - `DiagnosticsFacade.setEnabled(enabled: Boolean): Result<Unit>`
 - `DiagnosticsFacade.emit(event: DiagnosticEvent): Result<Unit>`
-- `DiagnosticsFacade.export(): DiagnosticsExportResult`
+- `DiagnosticsFacade.export(destinationUri: Uri, targetLabel: String): DiagnosticsExportResult`
 - `DiagnosticsFacade.clear(): DiagnosticsClearResult`
 
 ## Internal Structure
@@ -131,11 +131,11 @@ This package doc stays structural. The durable parts are:
 
 ### `diagnostics/export`
 
-- Purpose: own export-bundle creation, export retention, and clear-or-export user actions.
+- Purpose: own export-bundle creation and clear-or-export user actions.
 - What it owns:
   - zip-bundle construction,
-  - external bundle retention,
-  - clear coordination over internal and exported artifacts.
+  - writing to the user-chosen export destination,
+  - clear coordination over retained internal artifacts.
 - What it must not own:
   - event append logic,
   - product routing.
@@ -167,16 +167,16 @@ class DiagnosticsFacade(
     fun observeSettings(): StateFlow<DiagnosticsSettings>
     suspend fun setEnabled(enabled: Boolean): Result<Unit>
     suspend fun emit(event: DiagnosticEvent): Result<Unit>
-    suspend fun export(): DiagnosticsExportResult
+    suspend fun export(destinationUri: Uri, targetLabel: String): DiagnosticsExportResult
     suspend fun clear(): DiagnosticsClearResult
 }
 ```
 
 ### `DiagnosticsSettingsStore.kt`
 - Internal area: `diagnostics/settings`
-- Purpose: own the persisted diagnostics setting in shared `ConfigStore`.
+- Purpose: own the persisted diagnostics setting in the shared diagnostics settings store.
 - Responsibility: hydrate `DiagnosticsSettings` from storage on startup.
-- Depends on: shared `ConfigStore`
+- Depends on: shared diagnostics settings store
 - Must not depend on: artifact files
 - Visibility: `public`
 - Key types/functions:
@@ -228,7 +228,8 @@ enum class DiagnosticDomain {
     ARCHIVE_SELECTION,
     DOWNLOADS,
     SETTINGS,
-    NOTIFICATIONS
+    NOTIFICATIONS,
+    REAL_DEBRID
 }
 
 data class DiagnosticEvent(
@@ -305,24 +306,20 @@ class DiagnosticsSink(
 
 ```kotlin
 data class DiagnosticsArtifactSnapshot(
-    val manifest: Path,
-    val timeline: Path,
-    val failures: Path,
-    val summary: Path,
+    val manifest: File,
+    val timeline: File,
+    val failures: File,
+    val summary: File,
     val totalBytes: Long
 )
 
 data class StagedInternalClear(
-    val backupRoot: Path
-)
-
-data class DiagnosticsExportBundle(
-    val bundlePath: Path,
-    val createdAt: Instant
+    val backupRoot: File?
 )
 
 class DiagnosticsStore(
-    private val filesystem: DiagnosticsFilesystem
+    private val filesystem: DiagnosticsFilesystem,
+    private val json: Json
 ) {
     suspend fun appendTimeline(event: DiagnosticEvent): Result<Unit>
     suspend fun appendFailure(event: DiagnosticEvent): Result<Unit>
@@ -345,10 +342,8 @@ class DiagnosticsStore(
 - Key types/functions:
 
 ```kotlin
-class SummaryProjector(
-    private val diagnosticsStore: DiagnosticsStore
-) {
-    suspend fun apply(event: DiagnosticEvent): Result<Unit>
+class SummaryProjector {
+    fun project(events: List<DiagnosticEvent>): DiagnosticsSummary
 }
 ```
 
@@ -364,9 +359,10 @@ class SummaryProjector(
 ```kotlin
 class RetentionRotator(
     private val diagnosticsStore: DiagnosticsStore,
+    private val summaryProjector: SummaryProjector,
     private val maxBytes: Long = 25L * 1024L * 1024L
 ) {
-    suspend fun rotateIfNeeded(): Result<Unit>
+    suspend fun enforce(): Result<Unit>
 }
 ```
 
@@ -381,11 +377,7 @@ class RetentionRotator(
 
 ```kotlin
 sealed interface DiagnosticsExportResult {
-    data class Exported(val bundlePath: Path) : DiagnosticsExportResult
-    data class ExportedWithRetentionFailure(
-        val bundlePath: Path,
-        val message: String
-    ) : DiagnosticsExportResult
+    data class Exported(val targetLabel: String) : DiagnosticsExportResult
     data class Failed(val message: String) : DiagnosticsExportResult
 }
 
@@ -398,15 +390,15 @@ class DiagnosticsExportService(
     private val diagnosticsStore: DiagnosticsStore,
     private val bundleWriter: DiagnosticsBundleWriter
 ) {
-    suspend fun exportCurrent(): DiagnosticsExportResult
+    suspend fun exportCurrent(destinationUri: Uri, targetLabel: String): DiagnosticsExportResult
     suspend fun clearAll(): DiagnosticsClearResult
 }
 ```
 
 ### `DiagnosticsBundleWriter.kt`
 - Internal area: `diagnostics/export`
-- Purpose: write and retain exported diagnostics bundles.
-- Responsibility: create timestamped zip bundles and keep only the latest 3.
+- Purpose: write an exported diagnostics zip bundle to the user-selected destination.
+- Responsibility: create a timestamped zip payload from the current diagnostics artifact snapshot.
 - Depends on: export filesystem boundary
 - Must not depend on: product stores
 - Visibility: `internal`
@@ -416,16 +408,12 @@ class DiagnosticsExportService(
 class DiagnosticsBundleWriter(
     private val exportFilesystem: DiagnosticsExportFilesystem
 ) {
-    suspend fun write(snapshot: DiagnosticsArtifactSnapshot): Result<Path>
-    suspend fun retainLatest(limit: Int = 3): Result<Unit>
-    suspend fun stageExportClear(): Result<StagedExportClear>
-    suspend fun commitExportClear(staged: StagedExportClear): Result<Unit>
-    suspend fun rollbackExportClear(staged: StagedExportClear): Result<Unit>
+    suspend fun write(
+        snapshot: DiagnosticsArtifactSnapshot,
+        manifest: DiagnosticsManifest,
+        destinationUri: Uri
+    ): Result<Unit>
 }
-
-data class StagedExportClear(
-    val backupRoot: Path
-)
 ```
 
 ## Key Flows
@@ -445,23 +433,20 @@ data class StagedExportClear(
    - When internal artifacts exceed 25 MB, oldest retained diagnostics content is rotated out first.
 
 4. Export:
-   - `DiagnosticsExportService.exportCurrent()` snapshots the current artifact set.
-   - `DiagnosticsBundleWriter` creates a timestamped zip in app-specific external export storage.
-   - Export retention trims to the latest 3 bundles.
-   - If the bundle is created but retention cleanup fails, the newest bundle remains available and the result reports success with cleanup failure.
+   - `ui/settings` launches the Android document picker so the user chooses the export filename and destination.
+   - `DiagnosticsExportService.exportCurrent(...)` snapshots the current artifact set.
+   - `DiagnosticsBundleWriter` writes a timestamped zip payload into that chosen destination.
 
 5. Clear:
-   - `DiagnosticsExportService.clearAll()` stages internal-artifact clear and export-bundle clear before committing either.
-   - Commit happens only after both staged-delete plans succeed.
-   - If one commit fails, diagnostics rolls both sides back and reports failure.
+   - `DiagnosticsExportService.clearAll()` stages internal-artifact clear before commit.
+   - If the clear commit fails, diagnostics rolls the retained internal artifacts back and reports failure.
 
 ## Failure and Recovery Rules
 
 - Diagnostics write failures must not crash or block product flows.
 - While diagnostics is disabled, no events are appended.
 - Clear and export must never surface partial success to the UI.
-- Failed clear leaves both internal diagnostics artifacts and exported bundles unchanged.
-- Export may succeed while retention cleanup fails; that is reported explicitly without hiding the newest bundle.
+- Failed clear leaves retained internal diagnostics artifacts unchanged.
 - Diagnostics content must be redacted before persistence or export.
 - Diagnostics is never a source of product truth.
 
@@ -504,8 +489,6 @@ data class StagedExportClear(
 - Scope: unit
 - Covers:
   - timestamped bundle creation
-  - latest-3 retention
-  - staged export clear commit and rollback
 - Fixtures:
   - temp export filesystem
 
@@ -514,10 +497,9 @@ data class StagedExportClear(
 - Scope: unit
 - Covers:
   - export success
-  - export success with retention cleanup failure reports `ExportedWithRetentionFailure`
   - export failure does not report success
   - clear success
-  - clear failure rolls internal and exported artifacts back without reporting success
+  - clear failure rolls internal artifacts back without reporting success
 - Fixtures:
   - fake `DiagnosticsStore`
   - fake `DiagnosticsBundleWriter`

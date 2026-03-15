@@ -22,6 +22,15 @@
 9. Setup completion unlocks Home, Downloads, and Settings; shell behavior follows [`app-shell.md`](app-shell.md).
 10. After setup has completed once, later breakage of a saved API key, source, or download directory does not reopen Setup; post-setup recovery follows [`app-shell.md`](app-shell.md), [`home.md`](home.md), and [`settings.md`](settings.md).
 11. All three required inputs are persisted so the user does not re-enter setup on next launch when configuration remains valid; persistence rules follow [`persistence.md`](persistence.md).
+12. Setup content stays clear of the Android status bar and uses the same safe top spacing as the rest of the app shell.
+13. Setup visually separates:
+   - the title and description,
+   - the API key section,
+   - the source section,
+   - the download-directory section,
+   - the final completion action.
+14. Setup includes a visible helper action that opens `https://real-debrid.com/apitoken` for retrieving the Real-Debrid API token.
+15. `Complete setup` is visually distinct from the other action buttons, centered, and disabled until API key, source, and download directory have all been provided locally.
 ## Failure Behavior
 
 1. Invalid API key, source, or download directory shows clear corrective feedback.

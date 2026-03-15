@@ -27,6 +27,12 @@ spike-1-clean:
 spike-1-delete env_file=".env.local":
     python3 ./scripts/delete_spike1_existing.py "{{env_file}}"
 
+spike-5-build:
+    ../../gradlew -p apps/spike-5-try-all-api --no-daemon test installDist
+
+spike-5 env_file="apps/spike-5-try-all-api/.env.local":
+    ../../gradlew -p apps/spike-5-try-all-api --no-daemon run --args='{{env_file}}'
+
 spike-2-android:
     just fixtures
     ../../gradlew -p apps/spike-2-android :app:spike2ConnectedMatrix

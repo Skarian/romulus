@@ -6,13 +6,14 @@
 
 ## Expected Result
 
-1. On page open, app shows resolving or loading state until file resolution finishes.
-2. Files page chooses one resolution mode from entry `path`:
+1. On page open, app shows a centered loading state with plain-language copy until file resolution finishes or enters archive preparation.
+2. Files page chooses one resolution mode from entry `scope`:
    - standard mode for directory or root scope,
-   - archive-selection mode for an exact `.zip` file path, as defined in [`archive-selection.md`](archive-selection.md).
-3. In standard mode, file list resolves from Real-Debrid metadata across all torrents in the selected entry.
-4. Android recreation caused by a configuration change does not trigger a new resolver run; resolver rerun happens only on page open for a source row or explicit user `Retry`.
-5. Android recreation caused by a configuration change preserves:
+   - archive-selection mode for an exact `.zip` `scope.path`, as defined in [`archive-selection.md`](archive-selection.md).
+3. In standard mode, file list resolves from cached browse inventory for the selected snapshot entry.
+4. On the first successful standard-mode resolution for a snapshot entry, app may temporarily add the entry magnets to Real-Debrid, read the provider file list, cache the resulting browse inventory locally on-device, and then delete the temporary provider torrents.
+5. Android recreation caused by a configuration change does not trigger a new resolver run; resolver rerun happens only on page open for a source row or explicit user `Retry`.
+6. Android recreation caused by a configuration change preserves:
    - the current source entry,
    - the current resolution mode,
    - the resolved file rows or current resolver failure state,
@@ -20,54 +21,63 @@
    - the selected rows,
    - the current `Apply rename`, `Unarchive`, and `Recursive unarchive` toggle state,
    - the current list position.
-6. In standard mode, files are included only when:
-   - file path is inside entry `path` scope,
+7. In standard mode, files are included only when:
+   - file path is inside entry `scope.path`,
+   - direct-child-only matching is used unless `scope.includeNestedFiles` is `true`,
    - file basename does not match ignore glob rules (case-insensitive).
-7. Standard-mode filtering order is path scope first, then ignore rules; source-validation rules for these fields follow [`source.md`](source.md).
-8. File rows are sorted alphabetically by original file name in both modes:
+8. Standard-mode filtering order is scope first, then ignore rules; source-validation rules for these fields follow [`source.md`](source.md).
+9. File rows are sorted alphabetically by original file name in both modes:
    - standard mode uses torrent file names,
    - archive-selection mode uses internal zip file names.
-9. File rows display original file names.
-10. Search is a dialog with:
+10. Files page title shows the selected source name instead of a generic `Files` heading.
+11. File rows display original file names.
+12. Search is a dialog with:
    - a search box,
    - `Done` action,
    - `Clear` action.
-11. Search is case-insensitive and matches original file name only.
-12. Empty search query shows all files.
-13. If resolution succeeds but zero rows are visible after path, ignore, archive-selection, and search filtering, Files shows `No files available` empty state.
-14. Files page provides a `File preferences` dialog.
-15. `Apply rename` appears inside `File preferences` only when `entries[i].rename` exists with valid `pattern` and `replacement` fields.
-16. When shown, `Apply rename` initial toggle state is enabled.
-17. User can toggle `Apply rename` for the current Files page before queueing; this does not rewrite source JSON.
-18. `Unarchive` appears inside `File preferences` only when `entries[i].unarchive` key is present (even when its value is `false`).
-19. When shown, `Unarchive` initial toggle state equals `entries[i].unarchive`.
-20. User can toggle `Unarchive` for the current Files page before queueing; this does not rewrite source JSON.
-21. `Recursive unarchive` appears inside `File preferences` only when `entries[i].recursiveUnarchive` key is present (even when its value is `false`).
-22. When shown, `Recursive unarchive` is enabled only while `Unarchive` is enabled for the current Files page.
-23. When `Unarchive` is enabled, `Recursive unarchive` initial toggle state equals `entries[i].recursiveUnarchive`.
-24. When `Unarchive` is disabled, `Recursive unarchive` shows as off and non-interactive.
-25. User can toggle `Recursive unarchive` for the current Files page before queueing only while `Unarchive` is enabled; this does not rewrite source JSON.
-26. Queue payload normalizes `recursive-unarchive intent` to `false` whenever `unarchive intent` is `false`.
-27. Multi-select is supported.
-28. Select all and select none operate on visible rows only.
-29. Download action is disabled until at least one file is selected.
-30. File details dialog shows:
+13. Search is case-insensitive and matches original file name only.
+14. Empty search query shows all files.
+15. While archive-selection is waiting for the outer `.zip` to finish preparing in Real-Debrid, Files shows archive-preparation status and does not show `No files available`.
+16. If resolution succeeds but zero rows are visible after path, ignore, archive-selection, and search filtering, Files shows a centered `No files available` empty state.
+17. Files page provides a `File preferences` dialog.
+18. `Apply rename` appears inside `File preferences` only when `entries[i].rename` exists with valid `pattern` and `replacement` fields.
+19. When shown, `Apply rename` initial toggle state is enabled.
+20. User can toggle `Apply rename` for the current Files page before queueing; this does not rewrite source JSON.
+21. `Unarchive` appears inside `File preferences` only when `entries[i].unarchive` object is present.
+22. When shown, `Unarchive` initial toggle state is enabled.
+23. User can toggle `Unarchive` for the current Files page before queueing; this does not rewrite source JSON.
+24. `Recursive unarchive` appears inside `File preferences` only when `entries[i].unarchive` object is present.
+25. When shown, `Recursive unarchive` is enabled only while `Unarchive` is enabled for the current Files page.
+26. When `Unarchive` is enabled, `Recursive unarchive` initial toggle state equals `entries[i].unarchive.recursive` when present, or `false` when omitted.
+27. When `Unarchive` is disabled, `Recursive unarchive` shows as off and non-interactive.
+28. User can toggle `Recursive unarchive` for the current Files page before queueing only while `Unarchive` is enabled; this does not rewrite source JSON.
+29. Queue payload stores one unarchive intent for the selected row:
+   - whether unarchive is enabled,
+   - whether recursive extraction is enabled,
+   - the source-defined extraction layout policy.
+30. Multi-select is supported.
+31. Select all and select none operate on visible rows only.
+32. Download action is disabled until at least one file is selected.
+33. File details dialog shows:
    - original file name,
    - file size,
    - source context (`part label` and `torrent file id` when available).
-31. Queue payload preserves download intent fields:
+34. Queue payload preserves download intent fields:
    - snapshot identity,
    - entry identity,
    - file identity,
    - naming intent,
    - unarchive intent,
-   - recursive-unarchive intent,
    - storage target context,
-   - source-derived execution context needed for later execution, retry, restart, and recovery without rebinding to a newer active snapshot.
-32. Starting downloads shows confirmation and routes user to Downloads.
-33. Naming and rename semantics follow [`naming.md`](naming.md).
-34. Post-download unarchive behavior and archive handling follow [`downloads.md`](downloads.md).
-35. When diagnostics is enabled, Files events are captured:
+   - source-derived execution context needed for later execution, retry, restart, and recovery without rebinding to a newer active snapshot:
+     - torrent-native selection intent for standard mode,
+     - archive-preparation key plus archive-entry identity for archive-selection mode.
+35. Starting downloads shows confirmation and routes user to Downloads.
+36. Successful download start clears the current Files-page selection before the user later returns to that source entry.
+37. System back from Files returns the user to Home.
+38. Naming and rename semantics follow [`naming.md`](naming.md).
+39. Post-download unarchive behavior and archive handling follow [`downloads.md`](downloads.md).
+40. When diagnostics is enabled, Files events are captured:
    - file resolution start and outcome,
    - `Retry` action,
    - selection and select-all or select-none actions,

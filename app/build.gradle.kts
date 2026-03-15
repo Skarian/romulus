@@ -60,6 +60,17 @@ kotlin {
     }
 }
 
+val generatedSourceSchemaAssetsDir = layout.buildDirectory.dir("generated/source-schema-assets")
+val syncSourceSchema by tasks.registering(Copy::class) {
+    from(rootProject.file("docs/schema.json"))
+    into(generatedSourceSchemaAssetsDir)
+    rename { "source-schema.json" }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(syncSourceSchema)
+}
+
 kapt {
     correctErrorTypes = true
 }
@@ -79,6 +90,8 @@ detekt {
     }
 }
 
+android.sourceSets.getByName("main").assets.srcDir(generatedSourceSchemaAssetsDir)
+
 tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
     reports {
         checkstyle.required.set(true)
@@ -93,6 +106,7 @@ dependencies {
     detektPlugins("io.nlopez.compose.rules:detekt:0.5.0")
 
     implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.activity:activity-compose:1.12.0")
@@ -110,10 +124,13 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("com.networknt:json-schema-validator:2.0.1")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+    implementation("org.apache.commons:commons-compress:1.28.0")
+    implementation("com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03")
     val composeBom = platform("androidx.compose:compose-bom:2026.01.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
@@ -128,6 +145,7 @@ dependencies {
     testImplementation("androidx.test:core-ktx:1.7.0")
     testImplementation("androidx.room:room-testing:2.8.4")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

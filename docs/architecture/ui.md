@@ -23,6 +23,7 @@ It does not try to freeze one exact Compose implementation.
 - Observe owner-backed state and map it into presentation models.
 - Preserve screen-local state across configuration change through lifecycle-aware view models and saved state.
 - Preserve the current app's proven visual language by default.
+- Own the runtime Material theme through shared color resources and `ui/theme`, not through screen-local color constants.
 
 ## Explicit Non-Responsibilities
 
@@ -89,7 +90,9 @@ These entry points are consumed only by `app/`.
 - What it owns:
   - tab layout,
   - shell-level snackbar host,
-  - route-to-screen rendering.
+  - route-to-screen rendering,
+  - restoring the last Home-owned subroute when the user returns to the `Home` tab,
+  - compact shell spacing so rotated phone layouts keep usable content height.
 - What it must not own:
   - startup routing,
   - notification deep-link parsing,
@@ -247,7 +250,7 @@ fun ShellScaffold(
 ### `SetupScreen.kt`
 - Internal area: `ui/setup`
 - Purpose: render the first-run form.
-- Responsibility: show edits, picker results, validation errors, and submit progress.
+- Responsibility: show edits, picker results, validation errors, and submit progress while respecting the same safe top inset used by the shell-hosted screens, visually grouping the setup sections, and exposing the Real-Debrid token helper link.
 - Depends on: `SetupViewModel`
 - Must not depend on: stores or raw platform APIs
 - Visibility: `public`
@@ -411,11 +414,15 @@ fun FilesScreen(
 ```kotlin
 data class FilesRouteArgs(
     val snapshotId: SnapshotId,
-    val entryId: SourceEntryId
+    val entryId: SourceEntryId,
+    val entryDisplayName: String
 )
 
 data class FilesUiState(
+    val entryDisplayName: String,
     val mode: FilesMode,
+    val isResolving: Boolean,
+    val preparing: FilesPreparingState?,
     val rows: List<SelectableRowModel>,
     val selectedIds: Set<SelectableItemId>,
     val preferences: FilePreferencesState,
@@ -434,6 +441,12 @@ data class SelectableRowModel(
     val originalDisplayName: String,
     val sizeLabel: String,
     val partLabel: String?
+)
+
+data class FilesPreparingState(
+    val statusLabel: String?,
+    val progressPercent: Double?,
+    val timeoutAtEpochMillis: Long
 )
 
 class FilesViewModel(
@@ -457,7 +470,7 @@ class FilesViewModel(
 ### `FilePreferencesState.kt`
 - Internal area: `ui/files`
 - Purpose: make the page-local rename and unarchive choices explicit.
-- Responsibility: normalize `recursiveUnarchive` to `false` whenever `unarchive` is off.
+- Responsibility: normalize recursive extraction to `false` whenever `unarchive` is off while preserving the source-defined layout policy for queueing.
 - Depends on: Kotlin stdlib only
 - Must not depend on: source stores or queue stores
 - Visibility: `internal`
@@ -467,9 +480,8 @@ class FilesViewModel(
 data class FilePreferencesState(
     val renameAvailable: Boolean,
     val applyRename: Boolean,
-    val unarchiveAvailable: Boolean,
+    val unarchivePolicy: ExtractionLayoutPolicy?,
     val unarchiveEnabled: Boolean,
-    val recursiveUnarchiveAvailable: Boolean,
     val recursiveUnarchiveEnabled: Boolean
 ) {
     fun normalized(): FilePreferencesState
@@ -530,7 +542,7 @@ class DownloadsViewModel(
 ### `SettingsScreen.kt`
 - Internal area: `ui/settings`
 - Purpose: render editable settings sections and diagnostics controls.
-- Responsibility: keep the current settings layout while reflecting field-specific locks correctly.
+- Responsibility: keep the current settings layout while reflecting field-specific locks correctly, use a discrete slider for concurrency, and expose compact diagnostics actions.
 - Depends on: `SettingsViewModel`
 - Must not depend on: stores or raw platform APIs
 - Visibility: `public`
@@ -564,7 +576,7 @@ data class SettingsFieldLockState(
 
 data class SettingsUiState(
     val maskedToken: String,
-    val sourceSummary: AcceptedSourceSummary,
+    val sourceSummary: AcceptedSourceSummary?,
     val downloadSettings: DownloadSettingsState,
     val diagnosticsSettings: DiagnosticsSettings,
     val lockState: SettingsFieldLockState,
@@ -586,7 +598,7 @@ class SettingsViewModel(
     fun saveDownloadSettings(draft: DownloadSettingsDraft)
     fun setDiagnosticsEnabled(enabled: Boolean)
     fun clearDiagnostics()
-    fun exportDiagnostics()
+    fun exportDiagnostics(destinationUri: Uri, targetLabel: String)
 }
 ```
 
@@ -596,7 +608,7 @@ class SettingsViewModel(
    - `SetupViewModel` holds local drafts and picked URIs.
    - URI-grant capture stays app-owned and is invoked through callbacks.
    - On successful `SetupSubmissionCoordinator.submit`, `SetupViewModel` emits `SetupEffect.Completed`.
-   - `ShellScaffold` calls the app-owned `onSetupCompleted` callback so setup hands off into the shell without process recreation.
+   - `ShellScaffold` calls the app-owned `onSetupCompleted` callback so the startup session transitions from `Setup` to `Shell` without process recreation.
 
 2. Home invalid-settings recovery:
    - `HomeViewModel` combines `ShellReadiness` and `HomeSourceState`.

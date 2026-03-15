@@ -17,9 +17,9 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
 - Persist the active accepted-source record.
 - Stage and publish the latest active snapshot.
 - Expose live source-readiness and home-state projections.
-- Prepare standard browse rows from Real-Debrid inventory.
-- Prepare archive-selection browse rows from exact `.zip` paths through `remotezip/`.
-- Apply path scope first and ignore rules second before rows reach `ui/files`.
+- Prepare standard browse rows from locally cached browse inventory keyed by snapshot entry, filling that cache through temporary Real-Debrid enumeration when needed.
+- Prepare archive-selection browse rows from exact `.zip` `scope.path` values through `remotezip/`.
+- Apply source scope first and ignore rules second before rows reach `ui/files`.
 
 ## Explicit Non-Responsibilities
 
@@ -62,7 +62,7 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
   - `ui/home` for home-state observation and refresh.
   - `ui/files` for browse requests.
 - Outbound dependencies:
-  - `realdebrid/` for provider inventory and exact `.zip` container resolution.
+- `realdebrid/` for standard browse cache fills, exact `.zip` file matching, and resumable outer-container preparation during archive-selection mode.
   - `remotezip/` for remote ZIP enumeration.
   - `diagnostics/` for accept, refresh, and browse events.
 - What may cross the root-package boundary:
@@ -85,7 +85,7 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
 - `SourceFacade.observeHomeState(): StateFlow<HomeSourceState>`
 - `SourceFacade.observeReadiness(): StateFlow<SourceReadiness>`
 - `SourceFacade.readStartupReadiness(): SourceReadiness`
-- `SourceFacade.observeAcceptedSourceSummary(): StateFlow<AcceptedSourceSummary>`
+- `SourceFacade.observeAcceptedSourceSummary(): StateFlow<AcceptedSourceSummary?>`
 - `SourceFacade.browse(request: BrowseRequest): BrowseResult`
 
 ## Internal Structure
@@ -152,7 +152,8 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
   - output writes.
 - Sibling interaction:
   - consumes active snapshot entries from `source/snapshot`,
-  - uses `realdebrid/` and `remotezip/`.
+  - uses cached standard browse inventory for standard mode,
+  - uses `realdebrid/` and `remotezip/` for archive-selection mode.
 - What may cross this seam:
   - `SelectableItem`,
   - `BrowseMode`,
@@ -161,6 +162,24 @@ This package remains more concrete than `app/` or `ui/` because it owns hard cor
   - transport clients,
   - queue stores,
   - output reservations.
+
+### `source/torrentmeta`
+
+- Purpose: own torrent-native standard-file selection intent plus the cached standard browse inventory shape.
+- What it owns:
+  - torrent-native file records and selection-intent construction.
+- What it must not own:
+  - Real-Debrid request execution,
+  - browse filtering,
+  - queue creation.
+- Sibling interaction:
+  - feeds cached standard browse inventory into `source/browse`.
+- What may cross this seam:
+  - torrent metadata file records,
+  - torrent-native selection intent.
+- What may not cross this seam:
+  - queue rows,
+  - Real-Debrid models.
 
 ## Internal Files
 
@@ -184,7 +203,7 @@ class SourceFacade(
     fun observeHomeState(): StateFlow<HomeSourceState>
     fun observeReadiness(): StateFlow<SourceReadiness>
     suspend fun readStartupReadiness(): SourceReadiness
-    fun observeAcceptedSourceSummary(): StateFlow<AcceptedSourceSummary>
+    fun observeAcceptedSourceSummary(): StateFlow<AcceptedSourceSummary?>
     suspend fun browse(request: BrowseRequest): BrowseResult
 }
 ```
@@ -283,11 +302,25 @@ data class SourceEntryDocument(
     val displayName: String,
     val subfolder: String,
     val torrents: List<SourceTorrentDocument>,
-    val path: String?,
+    val scope: SourceScopeDocument?,
     val ignore: IgnoreRulesDocument?,
     val rename: RenameRule?,
-    val unarchive: Boolean?,
-    val recursiveUnarchive: Boolean?
+    val unarchive: UnarchiveDocument?
+)
+
+data class SourceScopeDocument(
+    val path: String,
+    val includeNestedFiles: Boolean = false
+)
+
+data class UnarchiveDocument(
+    val recursive: Boolean = false,
+    val layout: UnarchiveLayoutDocument
+)
+
+data class UnarchiveLayoutDocument(
+    val mode: UnarchiveLayoutModeDocument,
+    val rename: RenameRule? = null
 )
 
 data class SourceDocument(
@@ -310,7 +343,7 @@ class SourceDocumentParser(
 ### `SourceValidation.kt`
 - Internal area: `source/ingest`
 - Purpose: centralize runtime validation rules that sharpen the schema.
-- Responsibility: reject invalid path scope, ignore rules, rename regex, and recursive-unarchive invariants that sharpen [`schema.json`](../schema.json) before any source update becomes active.
+- Responsibility: reject invalid source scope, ignore rules, rename regex, and dedicated-folder rename regex that sharpen [`schema.json`](../schema.json) before any source update becomes active.
 - Depends on: `SourceDocumentParser.kt`
 - Must not depend on: snapshot store or browse services
 - Visibility: `internal`
@@ -321,35 +354,38 @@ sealed interface SourceValidationIssue {
     data class InvalidVersion(val found: Int) : SourceValidationIssue
     data class InvalidSubfolder(val subfolder: String) : SourceValidationIssue
     data class InvalidPath(val path: String) : SourceValidationIssue
+    data class InvalidScope(val message: String) : SourceValidationIssue
     data class InvalidIgnoreRule(val pattern: String) : SourceValidationIssue
     data class InvalidRenameRule(val message: String) : SourceValidationIssue
-    data class InvalidRecursiveUnarchive(val message: String) : SourceValidationIssue
+    data class InvalidUnarchiveRule(val message: String) : SourceValidationIssue
 }
 
 class SourceValidation {
     fun validate(document: SourceDocument): List<SourceValidationIssue> {
         // Contract-bearing rules:
         // - only version 1 is accepted
-        // - path must normalize to root, directory scope, or exact `.zip`
+        // - omitted scope defaults to shallow root
+        // - scope.path must normalize to root, directory scope, or exact `.zip`
+        // - exact `.zip` scope cannot opt into nested files
         // - ignore globs must target basenames only
         // - rename regex must compile at acceptance time
-        // - recursiveUnarchive requires unarchive=true
+        // - dedicated-folder rename regex must compile at acceptance time
     }
 }
 ```
 
 ### `SourcePathRules.kt`
 - Internal area: `source/ingest`
-- Purpose: keep path normalization and ignore matching consistent between validation and browse.
-- Responsibility: normalize path values once and define the path-scope-then-ignore filtering rule.
+- Purpose: keep scope normalization and ignore matching consistent between validation and browse.
+- Responsibility: normalize scope values once and define the scope-then-ignore filtering rule.
 - Depends on: Kotlin stdlib only
 - Must not depend on: stores or provider clients
 - Visibility: `internal`
 - Key types/functions:
 
 ```kotlin
-fun normalizePath(raw: String?): String?
-fun ProviderFileRecord.isWithinScope(scope: String): Boolean
+fun normalizeScope(scope: SourceScopeDocument?): SourcePathScope?
+fun ProviderFileRecord.isWithinScope(scope: SourcePathScope): Boolean
 fun String.matchesIgnoreRules(ignoreGlobs: List<String>): Boolean
 ```
 
@@ -451,13 +487,25 @@ data class SourceSnapshotEntry(
     val displayName: String,
     val subfolder: String,
     val torrents: List<SourceTorrentRef>,
-    val normalizedPath: String,
+    val scope: SourcePathScope,
     val ignoreGlobs: List<String>,
     val renameRule: RenameRule?,
-    val unarchiveConfigured: Boolean,
-    val unarchiveDefault: Boolean,
-    val recursiveConfigured: Boolean,
-    val recursiveUnarchiveDefault: Boolean
+    val unarchivePolicy: UnarchivePolicy?
+)
+
+data class SourcePathScope(
+    val normalizedPath: String,
+    val includeNestedFiles: Boolean
+)
+
+data class UnarchivePolicy(
+    val recursiveDefault: Boolean,
+    val layout: ExtractionLayoutPolicy
+)
+
+data class ExtractionLayoutPolicy(
+    val mode: ExtractionLayoutMode,
+    val folderRenameRule: RenameRule? = null
 )
 
 data class SourceSnapshot(
@@ -623,34 +671,71 @@ class BrowseService(
 
 ### `StandardBrowseBuilder.kt`
 - Internal area: `source/browse`
-- Purpose: build standard browse rows from provider inventory.
-- Responsibility: apply path scope first, ignore rules second, and assign stable item ids from source-entry id plus provider file id.
-- Depends on: `RealDebridFacade`
+- Purpose: build standard browse rows from cached standard browse inventory.
+- Responsibility: apply source scope first, ignore rules second, and assign stable item ids from source-entry id plus torrent-native selection intent.
+- Depends on: `CachedStandardBrowseInventoryService`
 - Must not depend on: remote ZIP or queue services
 - Visibility: `internal`
 - Key types/functions:
 
 ```kotlin
 class StandardBrowseBuilder(
-    private val realDebridFacade: RealDebridFacade
+    private val enumerateTorrentMetadata: suspend (SnapshotId, SourceSnapshotEntry) -> Result<TorrentMetadataInventory>
 ) {
     suspend fun build(snapshotId: SnapshotId, entry: SourceSnapshotEntry): BrowseResult
+}
+```
+
+### `CachedStandardBrowseInventoryService.kt`
+- Internal area: `source/browse`
+- Purpose: load standard browse inventory for one snapshot entry, using the local browse cache first and filling it through temporary Real-Debrid enumeration on miss.
+- Responsibility: key cached browse inventory by `snapshotId` plus `entryId`, translate provider inventory into torrent-native selection intent, and keep browse filtering out of the fetch layer.
+- Depends on: `StandardBrowseInventoryCacheStore`, `RealDebridFacade`
+- Must not depend on: queue services or remote ZIP services
+- Visibility: `internal`
+- Key types/functions:
+
+```kotlin
+class CachedStandardBrowseInventoryService(
+    private val cacheStore: StandardBrowseInventoryCacheStore,
+    private val enumerateProviderFiles: suspend (ProviderInventoryRequest) -> Result<ProviderInventory>
+) {
+    suspend fun load(snapshotId: SnapshotId, entry: SourceSnapshotEntry): Result<TorrentMetadataInventory>
+}
+```
+
+### `StandardBrowseInventoryCacheStore.kt`
+- Internal area: `source/browse`
+- Purpose: persist per-snapshot-entry standard browse inventory on-device.
+- Responsibility: hydrate cached browse inventory without touching the provider and write new browse inventory after successful enumeration.
+- Depends on: local app files boundary only
+- Must not depend on: Real-Debrid HTTP or queue services
+- Visibility: `internal`
+- Key types/functions:
+
+```kotlin
+interface StandardBrowseInventoryCacheStore {
+    suspend fun read(snapshotId: SnapshotId, entryId: SourceEntryId): TorrentMetadataInventory?
+    suspend fun write(
+        snapshotId: SnapshotId,
+        entryId: SourceEntryId,
+        inventory: TorrentMetadataInventory
+    ): Result<Unit>
 }
 ```
 
 ### `ArchiveBrowseBuilder.kt`
 - Internal area: `source/browse`
 - Purpose: build archive-selection rows for exact `.zip` paths.
-- Responsibility: resolve the outer `.zip`, enumerate internal entries remotely, apply ignore rules, preserve duplicate-safe archive-entry identity, and sort rows alphabetically by internal file name before they reach `ui/files`.
-- Depends on: `RealDebridFacade`, `RemoteZipFacade`
+- Responsibility: map the cached archive-browse service result into either archive-preparing UI state or ready archive-entry rows, apply ignore rules, preserve duplicate-safe archive-entry identity, and sort rows alphabetically by internal file name before they reach `ui/files`.
+- Depends on: `CachedArchiveBrowseService`
 - Must not depend on: queue services, output services, full-download fallback logic
 - Visibility: `internal`
 - Key types/functions:
 
 ```kotlin
 class ArchiveBrowseBuilder(
-    private val realDebridFacade: RealDebridFacade,
-    private val remoteZipFacade: RemoteZipFacade
+    private val loadArchiveBrowse: suspend (SnapshotId, SourceSnapshotEntry) -> Result<ArchiveBrowseLoadResult>
 ) {
     suspend fun build(snapshotId: SnapshotId, entry: SourceSnapshotEntry): BrowseResult
 }
@@ -672,10 +757,7 @@ value class SelectableItemId(val value: String)
 data class SelectionPolicy(
     val renameRule: RenameRule?,
     val renameAvailable: Boolean,
-    val unarchiveToggleVisible: Boolean,
-    val unarchiveDefault: Boolean,
-    val recursiveToggleVisible: Boolean,
-    val recursiveUnarchiveDefault: Boolean
+    val unarchivePolicy: UnarchivePolicy?
 )
 
 data class SelectableItemSourceContext(
@@ -702,7 +784,7 @@ sealed interface SelectableItem {
         override val sizeBytes: Long?,
         override val selectionPolicy: SelectionPolicy,
         override val sourceContext: SelectableItemSourceContext,
-        val providerLocator: ProviderLocator
+        val selectionIntent: TorrentFileSelectionIntent
     ) : SelectableItem
 
     data class ArchiveEntry(
@@ -713,7 +795,7 @@ sealed interface SelectableItem {
         override val sizeBytes: Long?,
         override val selectionPolicy: SelectionPolicy,
         override val sourceContext: SelectableItemSourceContext,
-        val outerZip: ArchiveContainerLocator,
+        val preparationKey: ArchivePreparationKey,
         val archiveEntryIdentity: ArchiveEntryIdentity
     ) : SelectableItem
 }
@@ -745,15 +827,19 @@ sealed interface BrowseFailure {
 
 3. Standard browse:
    - `BrowseService` selects the entry from the active snapshot.
-   - `StandardBrowseBuilder` asks `realdebrid/` for aggregated provider inventory.
-   - Path scope is applied first.
+   - `StandardBrowseBuilder` asks the cached standard browse inventory service for that snapshot entry.
+   - On cache miss, `source/` temporarily enumerates provider files through `realdebrid/`, stores the resulting browse inventory locally, and reuses it on later opens for the same snapshot entry.
+   - Source scope is applied first.
    - Ignore rules are applied second.
    - Returned rows are sorted alphabetically by original file name.
 
 4. Archive-selection browse:
-   - `BrowseService` detects exact `.zip` path mode.
-   - `ArchiveBrowseBuilder` resolves the outer `.zip` URL through `realdebrid/`.
-   - `remotezip/` enumerates internal entries remotely.
+   - `BrowseService` detects exact `.zip` `scope.path` mode.
+   - `ArchiveBrowseBuilder` asks the shared archive-container preparation service for that snapshot entry.
+   - On first open, `source/` finds the exact outer `.zip` through `realdebrid/`, starts provider preparation for that one container, and persists the matched file plus resume marker locally.
+   - While the outer `.zip` is still preparing, Files stays in archive-preparing state and revisits resume that same provider acquisition instead of adding the magnet again.
+   - Once provider links are ready, the preparation service resolves one unrestricted outer-container URL, enumerates internal entries through `remotezip/`, and caches the ready result locally for that snapshot entry.
+   - Ready archive-entry rows carry a shared preparation key rather than their own outer-container locator so later downloads reuse the same outer-ZIP acquisition.
    - Ignore rules apply before rows reach the UI.
    - Returned rows are sorted alphabetically by internal file name.
    - Failure stays in archive-selection failure state and never falls back to standard browse.
@@ -790,9 +876,11 @@ sealed interface BrowseFailure {
 
 - Scope: unit
 - Covers:
-  - directory path validation
-  - exact `.zip` path validation
+  - omitted-scope shallow-root default
+  - directory scope validation
+  - exact `.zip` scope validation
   - exact non-`.zip` rejection
+  - exact `.zip` plus nested-files rejection
   - rename regex rejection at acceptance time
   - recursive-unarchive requires `unarchive=true`
 - Fixtures:
@@ -819,13 +907,13 @@ sealed interface BrowseFailure {
 
 - Scope: unit
 - Covers:
-  - path-scope-first filtering
+  - scope-first filtering
   - ignore-rules-second filtering
   - stable standard-file identity assignment
   - alphabetical sort by original file name
 - Fixtures:
-  - fake `RealDebridFacade`
-  - provider inventory fixtures
+  - fake cached inventory enumerator
+  - cached browse inventory fixtures
 
 ### `ArchiveBrowseBuilderTest.kt`
 

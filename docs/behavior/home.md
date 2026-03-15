@@ -35,9 +35,18 @@
 13. Configuration changes by themselves do not trigger source set, source update, or source refresh; source triggers remain only those defined in [`source.md`](source.md).
 14. If a usable snapshot has no entries, Home shows `No sources available` empty state.
 15. Row click opens File Selection for that entry.
-16. Each row clearly shows source name and folder context.
-17. If the active source snapshot is missing or unreadable while all saved required settings remain usable, Home shows a persistent visible warning banner and remains usable with the `No sources available` empty state; persistence guarantees follow [`persistence.md`](persistence.md).
-18. When diagnostics is enabled, Home events are captured:
+16. Each row clearly shows source name and an info affordance; folder context is not shown inline on the row.
+17. Tapping the row info affordance opens a source-details modal using the same simple title-and-facts dialog pattern as Files details, including:
+   - output folder,
+   - scope path,
+   - whether nested files are included,
+   - torrent part count and any available part labels,
+   - ignore-rule count,
+   - rename availability,
+   - unarchive availability,
+   - recursive unarchive default when unarchive is available.
+18. If the active source snapshot is missing or unreadable while all saved required settings remain usable, Home shows a persistent visible warning banner and remains usable with the `No sources available` empty state; persistence guarantees follow [`persistence.md`](persistence.md).
+19. When diagnostics is enabled, Home events are captured:
    - page open,
    - search apply and clear,
    - refresh result outcome,

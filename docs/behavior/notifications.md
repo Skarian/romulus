@@ -25,8 +25,9 @@
 10. Notification tap deep-links to Downloads.
 11. Status buckets align with [`status-model.md`](status-model.md).
 12. `completed/total` semantics align with [`downloads.md`](downloads.md).
-13. While active work remains non-zero, notification updates occur whenever the visible notification text or counters would change, including non-Running short-status transitions such as `Resolving`, `Preparing`, or `Retry scheduled`.
-14. When diagnostics is enabled, notification events are captured:
+13. Rows hidden by `Clear history` do not contribute to notification `completed/total`, `failed`, or `cancelled` counts.
+14. While active work remains non-zero, notification updates occur whenever the visible notification text or counters would change, including non-Running short-status transitions such as `Resolving`, `Preparing`, or `Retry scheduled`.
+15. When diagnostics is enabled, notification events are captured:
    - progress notification post and update,
    - progress notification clear,
    - completion notification post outcome.

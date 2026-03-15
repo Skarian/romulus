@@ -76,7 +76,7 @@ diagnostics/
    - active snapshot identity and replacement,
    - standard file listing preparation,
    - archive-selection listing preparation.
-4. `source/` applies path scope first and ignore rules second before items reach `ui/files`.
+4. `source/` applies source scope first and ignore rules second before items reach `ui/files`.
 
 ### 3.4 `downloads/`
 
@@ -107,8 +107,8 @@ diagnostics/
 3. `realdebrid/` owns:
    - API token validation,
    - request budgeting,
-   - torrent file listing,
-   - provider file selection,
+   - provider file selection and acquisition for queued standard-file work,
+   - exact-container provider lookup for archive-selection mode,
    - provider acquisition polling,
    - later unrestricted-link resolution after acquisition reports ready links.
 4. `realdebrid/` should expose Romulus-shaped models rather than leaking raw API details across the app.
@@ -143,9 +143,9 @@ diagnostics/
 7. `downloads/queue` owns `DownloadLedgerStore` as the shared physical backing store for durable queue records and recovery checkpoints, with separate logical records for `QueueTask`, durable row `createdAt` and `updatedAt` metadata, `QueueTaskState`, attempt counters, retry schedule, row-visibility metadata, persisted pending live actions, queue-owned persisted `OutputReservation` and `FinalOutputRecord` data, persisted `Preparing` display metadata including start time, timeout deadline, last provider status, and last provider progress when available, local transfer checkpoints, and opaque provider-preparation resume markers used to continue polling without resetting the existing `Preparing` deadline.
 8. `downloads/output` owns `OutputFilesystem` for temp artifacts, reserved destinations, final outputs, restart cleanup, and the identity shape of reservations plus final-output records; `downloads/output` does not own the queue ledger that persists task-attached copies of those records.
 9. `realdebrid/` owns `CredentialVault` access for encrypted API token storage and masked token readback.
-10. `diagnostics/settings` owns the diagnostics-settings record in `ConfigStore` for persisted diagnostics enabled state.
+10. `diagnostics/settings` owns the persisted diagnostics enabled-state record in its shared settings store.
 11. `diagnostics/store` owns `DiagnosticsStore` for retained internal diagnostics artifacts (`manifest.json`, `timeline.jsonl`, `failures.jsonl`, `summary.json`).
-12. `diagnostics/export` owns `DiagnosticsExportFilesystem` for timestamped exported bundles in app-specific external diagnostics storage, including export retention and clear cleanup.
+12. `diagnostics/export` owns `DiagnosticsExportFilesystem` for writing timestamped exported bundles into the user-selected destination returned by the Android document picker; exported files are user-owned and are not part of diagnostics clear semantics.
 
 ## 5. State Authorities
 
@@ -157,7 +157,7 @@ diagnostics/
 6. `downloads/output` is the only authority for output reservation identity, final-output identity, temp-to-final promotion, archive cleanup, and restart preconditions, but it receives queue-owned persisted reservation/output data as input rather than reading queue storage by `taskId`.
 7. `downloads/queue`, `downloads/work`, `downloads/attempts`, and `downloads/output` may exchange commands and records only through the documented seams here; none may mutate another owner's store or bypass another owner's authority.
 8. `downloads/queue` is the authority for whether active downloads exist; `ui/settings` uses that signal to decide whether normal edits are locked or owner-owned corrective changes are allowed.
-9. Sharing `ConfigStore` does not change ownership: `app/`, `source/ingest`, `downloads/config`, and `diagnostics/settings` each validate and persist only their own records.
+9. Sharing physical settings storage does not change ownership: `app/`, `source/ingest`, `downloads/config`, and `diagnostics/settings` each validate and persist only their own records.
 10. `diagnostics/store` is the only authority for retained internal diagnostics artifacts, and `diagnostics/export` is the only authority for exported-bundle retention and clear cleanup.
 11. `diagnostics/` is append-only from the perspective of the product flow; product packages may emit events, but they do not read diagnostics to drive product decisions.
 
@@ -167,7 +167,7 @@ diagnostics/
 2. `source/browse` assigns standard-file `SelectableItemId`.
 3. `remotezip/` assigns duplicate-safe archive-entry identity; archive-entry retry and redownload must use stable entry identity, never filename or path alone.
 4. `downloads/queue` assigns `taskId` and binds it to one enqueue-time `snapshotId` plus one selected-item identity; execution, retry, restart, and recovery never rebind a task to a newer active snapshot.
-5. `realdebrid/` owns provider locator data needed to re-resolve one queued selected item without changing queue identity.
+5. `source/torrentmeta` owns the torrent-native selection intent used to re-derive one queued standard-file selection without changing queue identity, while `realdebrid/` owns exact-zip provider locator data.
 6. `downloads/output` assigns reservation identity and final output record identity; display names are never the only durable key.
 
 ## 7. Shared Records and Commands
@@ -222,14 +222,14 @@ diagnostics/
 ### 8.3 Standard Files Browse
 
 1. `ui/files` asks `source/browse` for the selectable items for one snapshot entry.
-2. `source/browse` asks `realdebrid/` for provider file inventory.
-3. `source/browse` applies path scope first and ignore rules second.
+2. `source/browse` reads cached standard browse inventory for the snapshot entry and fills that cache through temporary `realdebrid/` enumeration on cache miss.
+3. `source/browse` applies source scope first and ignore rules second.
 4. `source/browse` returns `SelectableItem.StandardFile[]` to `ui/files`.
 5. Search, multi-select, and dialog state remain in `ui/files`.
 
 ### 8.4 Archive-Selection Browse
 
-1. `source/browse` detects the exact `.zip` path case from the accepted source entry.
+1. `source/browse` detects the exact `.zip` `scope.path` case from the accepted source entry.
 2. `source/browse` asks `realdebrid/` for the exact outer ZIP URL.
 3. `source/browse` asks `remotezip/` to probe and enumerate internal entries.
 4. `source/browse` applies ignore rules before returning rows.
@@ -246,11 +246,13 @@ diagnostics/
    - source entry reference,
    - selected item identity,
    - original display name,
-   - output naming intent,
-   - unarchive intent,
-   - recursive-unarchive intent,
-   - storage target context, including output sub-folder context when present,
-   - provider locator data needed for retry, restart, or recovery.
+     - output naming intent,
+     - unarchive intent,
+     - recursive-unarchive intent,
+     - storage target context, including output sub-folder context when present,
+     - source-owned execution context needed for retry, restart, or recovery:
+       - torrent-native standard-file selection intent, or
+       - archive-selection preparation key plus archive-entry identity.
 4. Execution, retry, restart, and recovery keep that queue binding and never rebind a task to a newer active snapshot.
 5. `ui/downloads` reads durable queue state from `downloads/queue`, not from reconstructed screen-local state.
 6. `ui/downloads` and `ui/settings` never infer active work from local UI memory; they read queue authority instead.
@@ -273,7 +275,7 @@ diagnostics/
 ### 8.7 Archive-Selection Download Execution
 
 1. `downloads/work` asks `downloads/queue` for runnable, queue-claimed archive-entry tasks only.
-2. `downloads/attempts` refreshes the exact outer ZIP URL through `realdebrid/`.
+2. `downloads/attempts` resolves the shared archive-preparation record to a ready outer ZIP URL before copy begins.
 3. `downloads/attempts` reopens the selected internal entry through `remotezip/` using duplicate-safe stable entry identity, never filename or path alone.
 4. `downloads/output` creates `OutputReservation` for the selected entry before any local artifact write begins.
 5. During selected-entry copy, `downloads/attempts` emits local-transfer checkpoint updates at least every 3 seconds and again on pause, cancel, failure, and completion; `downloads/queue` persists those updates into `DownloadLedgerStore`.
@@ -287,6 +289,7 @@ diagnostics/
    - output-name reservation,
    - bound output-root identity for one reservation,
    - temp-file placement,
+   - temp-artifact type preservation for local unarchive,
    - collision suffixing,
    - local unarchive decision,
    - recursive pass control,

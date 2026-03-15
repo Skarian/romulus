@@ -30,6 +30,62 @@ Standalone Android app for the Real-Debrid download manager.
 
 `installDebug` fails with `No connected devices!` if no emulator/phone is attached.
 
+## Icon Pipeline
+
+Generate Android launcher icons from the transparent artwork source:
+
+```bash
+just generate-icon
+```
+
+Defaults:
+
+- source artwork: `artwork/ROMULUS_TRANSPARENT.png`
+- icon and splash background: `@color/romulus_brand_background`
+- preview output: `artwork/generated/icon-preview-1024.png`
+- round preview output: `artwork/generated/icon-preview-round-1024.png`
+- splash preview output: `artwork/generated/icon-preview-splash-1024.png`
+- launcher assets: `app/src/main/res/mipmap-*/ic_launcher.png`
+- round launcher assets: `app/src/main/res/mipmap-*/ic_launcher_round.png`
+
+Optional overrides:
+
+```bash
+just generate-icon source=artwork/ROMULUS_TRANSPARENT.png background=#F3B51D padding=72 round_padding=144 splash_padding=220
+```
+
+## Theme Colors
+
+The runtime palette and splash/icon brand background are centralized in:
+
+- `app/src/main/res/values/colors.xml`
+- `app/src/main/res/values-night/colors.xml`
+
+Compose reads the Material color roles from those resources, and `just generate-icon` uses `romulus_brand_background` by default so icon, splash, and in-app branding stay aligned.
+
+The current visual direction is documented in `docs/design/aged-brass-ui.md`.
+
+## Device Screenshot Capture
+
+Capture the agreed UI review set from a connected adb device:
+
+```bash
+just capture-ui-screenshots
+```
+
+- Output root: `screenshots/`
+- Session output: `screenshots/YYYY-MM-DD_HH-MM/` using local time
+- File layout: `screenshots/<session>/<theme>/<screen>/<variant>.png`
+- Saved images: each capture is resized to 50% of the device screenshot dimensions before being written to disk
+- Device selection: uses `ANDROID_SERIAL` when set, otherwise requires exactly one connected adb device
+- Flow: the script prompts before running `just clear-app-data` for each Setup capture, then prints each page/modal instruction, waits for Enter to capture, and supports skip or retake
+
+Optional named session:
+
+```bash
+just capture-ui-screenshots session=aged-brass-pass-1
+```
+
 ## Runtime Flow
 
 The app is setup-gated. Before Home/Downloads/Settings are shown, setup must complete:
@@ -46,13 +102,14 @@ After setup, bottom navigation routes are:
 
 ## Source JSON Contract
 
-Each source entry can optionally define a torrent-internal `path` scope. File selection only enumerates files whose Real-Debrid path is inside that folder.
+Each source entry can optionally define a torrent-internal `scope` object. `scope.path` says where file selection starts, and `scope.includeNestedFiles` controls whether deeper descendants are eligible.
 
 - `version` stays `1`.
-- `entries[i].path` is optional.
-- If `path` is omitted, `null`, or blank, it defaults to `/` (root scope, include all files).
-- `path` uses forward slashes and cannot contain `..`.
-- Path matching is boundary-safe: `/Season 1` does not match `/Season 10`.
+- `entries[i].scope` is optional.
+- If `scope` is omitted, it defaults to `{ "path": "/", "includeNestedFiles": false }`.
+- `scope.path` uses forward slashes and cannot contain `..`.
+- `scope.path: "/"` means top-level files only unless `scope.includeNestedFiles` is `true`.
+- Path matching is boundary-safe: `/Season 1/` does not match `/Season 10/`.
 
 Example:
 
@@ -63,7 +120,10 @@ Example:
     {
       "displayName": "Show Pack",
       "subfolder": "shows/show-pack",
-      "path": "/Series/Season 01",
+      "scope": {
+        "path": "/Series/Season 01/",
+        "includeNestedFiles": true
+      },
       "torrents": [
         { "url": "magnet:?xt=urn:btih:...", "partName": "Part 1" }
       ],

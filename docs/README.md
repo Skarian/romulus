@@ -37,6 +37,16 @@ just diagram
 
 Open the local Vite URL shown in terminal.
 
+## Export Docs
+
+```bash
+cd docs
+just export-docs
+```
+
+`just export-docs` writes a timestamped zip under `docs/exports/`.
+When run interactively, it also asks whether to include the active ExecPlans and, if you answer `yes`, adds them under `plans/` in the export archive.
+
 ## Viewer Features
 
 1. Top navigation links to each diagram.

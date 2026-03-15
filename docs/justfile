@@ -13,8 +13,35 @@ export-docs:
     export_dir="$docs_dir/exports"
     timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
     archive_path="$export_dir/docs-export-$timestamp.zip"
+    include_active_execplans="no"
+    temp_dir=""
+    cleanup() {
+        if [[ -n "$temp_dir" && -d "$temp_dir" ]]; then
+            rm -rf "$temp_dir"
+        fi
+    }
+    trap cleanup EXIT
     mkdir -p "$export_dir"
     cd "$repo_dir"
+    if [[ -t 0 ]]; then
+        while true; do
+            printf 'Include active ExecPlans under /plans in the export archive? [y/N] '
+            read -r include_active_execplans_reply
+            include_active_execplans_reply="${include_active_execplans_reply:-n}"
+            case "${include_active_execplans_reply,,}" in
+                y|yes)
+                    include_active_execplans="yes"
+                    break
+                    ;;
+                n|no)
+                    break
+                    ;;
+                *)
+                    printf 'Please answer yes or no.\n'
+                    ;;
+            esac
+        done
+    fi
     architecture_docs=(docs/architecture/*.md)
     export_inputs=(
         docs/PRD.md
@@ -28,4 +55,18 @@ export-docs:
         "${architecture_docs[@]}"
     )
     zip -r "$archive_path" "${export_inputs[@]}"
+    if [[ "$include_active_execplans" == "yes" ]]; then
+        active_execplans=(.agent/execplans/active/*.md)
+        if (( ${#active_execplans[@]} > 0 )); then
+            temp_dir="$(mktemp -d)"
+            mkdir -p "$temp_dir/plans"
+            cp "${active_execplans[@]}" "$temp_dir/plans/"
+            (
+                cd "$temp_dir"
+                zip -r "$archive_path" plans
+            )
+        else
+            printf 'No active ExecPlans found; exported docs only.\n'
+        fi
+    fi
     printf 'Created %s\n' "$archive_path"

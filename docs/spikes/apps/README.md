@@ -10,10 +10,11 @@ This folder holds the harness docs for each spike.
 
 ## Harness Docs
 
-1. [`spike-1-cli/README.md`](/Users/nskaria/projects/romulus/docs/spikes/apps/spike-1-cli/README.md)
-2. [`spike-2-android/README.md`](/Users/nskaria/projects/romulus/docs/spikes/apps/spike-2-android/README.md)
-3. [`spike-3-remote-zip/README.md`](/Users/nskaria/projects/romulus/docs/spikes/apps/spike-3-remote-zip/README.md)
-4. [`spike-4-android/README.md`](/Users/nskaria/projects/romulus/docs/spikes/apps/spike-4-android/README.md)
+1. [`spike-1-cli/README.md`](spike-1-cli/README.md)
+2. [`spike-2-android/README.md`](spike-2-android/README.md)
+3. [`spike-3-remote-zip/README.md`](spike-3-remote-zip/README.md)
+4. [`spike-4-android/README.md`](spike-4-android/README.md)
+5. [`spike-5-try-all-api/README.md`](spike-5-try-all-api/README.md)
 
 ## Ownership Split
 
@@ -26,5 +27,6 @@ This folder holds the harness docs for each spike.
 
 1. These docs define the intended harness shape for each spike and, once implemented, the actual harness surface that should stay aligned with the code.
 2. Spike 1, Spike 2, Spike 3, and Spike 4 now have harness implementations under their folders.
-3. Shared repo-level recipes in `docs/spikes/justfile` are coordinator-owned cross-spike infrastructure and should stay aligned with the implemented harness surfaces.
-4. Keep each harness implementation and its matching doc aligned as the accepted record of the completed spike chapter.
+3. Spike 5 is an additional post-architecture-validation harness for `tryAll` Real-Debrid cache characterization.
+4. Shared repo-level recipes in `docs/spikes/justfile` are coordinator-owned cross-spike infrastructure and should stay aligned with the implemented harness surfaces.
+5. Keep each harness implementation and its matching doc aligned as the accepted record of the completed spike chapter.

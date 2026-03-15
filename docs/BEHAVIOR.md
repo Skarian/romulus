@@ -53,9 +53,9 @@ Flexible boundaries:
 4. Current Files behavior still always shows `Apply rename`; current contract intentionally scopes it to entries with rename regex and keeps row names original.
 5. Current Files failure behavior does not expose an explicit retry action; current contract intentionally requires a visible `Retry` action.
 6. Current Downloads behavior still exposes detailed status tags and `Delete partial`; current contract intentionally simplifies status language, adds explicit `Preparing` behavior for provider-side acquisition with a 24-hour cap, and keeps cleanup under `Restart`.
-7. Current Settings behavior still exposes manual refresh and wider concurrency limits; current contract intentionally removes manual refresh from Settings and bounds concurrency to `1..5`.
+7. Current Settings behavior still exposes manual refresh and wider concurrency limits; current contract intentionally removes manual refresh from Settings, sets fresh-setup default concurrency to `5`, and bounds concurrency to `1..50`.
 8. Notification behavior intentionally preserves terse status-only copy before bytes start moving, byte-first progress copy once downloads are active, and exact completion titles (`Downloads complete` or `Downloads finished`).
 9. Current Downloads behavior has no history-clear action; current contract adds `Clear history` to hide terminal rows without deleting app data, without unhide.
-10. Current app does not yet provide the entry-level `unarchive` and `recursiveUnarchive` contracts; current docs add optional schema-driven unarchive controls (with Files-page overrides), flattened extraction, recursive extraction option, and archive cleanup behavior.
+10. Current docs define an optional entry-level `unarchive` object with required layout policy, Files-page overrides, flat or dedicated-folder extraction, recursive extraction option, and archive cleanup behavior.
 11. Current app does not yet provide archive-selection mode for exact `.zip` source paths; current docs add remote internal-file selection and queueing behavior for this roadmap mode.
 12. Current app does not yet provide the diagnostics contract; current docs add structured diagnostics capture, bounded retention, clear and export controls, and support-ready bundles.

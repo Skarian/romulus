@@ -16,20 +16,27 @@
 1. App has exactly one active source configuration at a time (URL or file).
 2. URL source must start with `http://` or `https://`.
 3. Source input is validated against `version: 1` contract ([`schema.json`](../schema.json) + runtime validation).
-4. Source path and ignore rules are validated as part of source acceptance:
-   - `path` omitted, `null`, or blank defaults to root scope (`/`),
-   - non-root directory `path` values must end in `/`,
-   - `path` may represent directory scope or an exact `.zip` file path,
-   - exact `.zip` file path enables archive-selection mode on Files page, as defined in [`archive-selection.md`](archive-selection.md),
+4. Source scope and ignore rules are validated as part of source acceptance:
+   - `scope` omitted defaults to shallow root scope (`{ "path": "/", "includeNestedFiles": false }`),
+   - `scope.path` is required when `scope` exists,
+   - non-root directory `scope.path` values must end in `/`,
+   - `scope.path` may represent directory scope or an exact `.zip` file path,
+   - exact `.zip` `scope.path` enables archive-selection mode on Files page, as defined in [`archive-selection.md`](archive-selection.md),
    - exact non-`.zip` file paths reject source,
-   - invalid `path` (contains `..` or backslashes, or uses a non-root directory path without a trailing `/`) rejects source,
+   - invalid `scope.path` (blank, contains `..` or backslashes, or uses a non-root directory path without a trailing `/`) rejects source,
+   - `scope.includeNestedFiles` is optional and defaults to `false`,
+   - exact `.zip` `scope.path` with `scope.includeNestedFiles: true` rejects source,
    - ignore glob matching is case-insensitive against file basename,
    - invalid ignore rules reject source.
-5. `unarchive` is optional and must be a boolean when present:
-   - omitted `unarchive` defaults to `false`.
-6. `recursiveUnarchive` is optional and must be a boolean when present:
-   - omitted `recursiveUnarchive` defaults to `false`,
-   - if present, `unarchive` must also be present and equal `true`.
+5. `unarchive` is optional and must be an object when present:
+   - if omitted, the entry exposes no unarchive controls on Files,
+   - if present, the entry exposes unarchive controls on Files and the main `Unarchive` toggle defaults on.
+6. When `unarchive` is present:
+   - `layout` is required,
+   - `layout.mode` must be `flat` or `dedicatedFolder`,
+   - `recursive` is optional and defaults to `false`,
+   - `layout.rename` is allowed only when `layout.mode` is `dedicatedFolder`,
+   - invalid rename regex in either entry `rename` or `unarchive.layout.rename` rejects source.
 7. Source validity is all-or-nothing:
    - fully valid source is accepted,
    - any invalid source is rejected.
@@ -37,8 +44,8 @@
 9. URL cold-launch refresh runs once per cold launch when URL source is configured.
 10. Queued downloads bind to immutable snapshot identity captured at enqueue time.
 11. Queued downloads continue to use the source-derived execution context captured at enqueue time for execution, retry, restart, and recovery even if the active source snapshot later changes.
-12. Files-page inclusion behavior using `path` and ignore rules follows [`files.md`](files.md).
-13. Archive-selection activation and behavior for exact `.zip` paths follows [`archive-selection.md`](archive-selection.md).
+12. Files-page inclusion behavior using `scope` and ignore rules follows [`files.md`](files.md).
+13. Archive-selection activation and behavior for exact `.zip` `scope.path` values follows [`archive-selection.md`](archive-selection.md).
 14. When diagnostics is enabled, source set, update, and refresh triggers and outcomes are captured:
    - accepted,
    - rejected,

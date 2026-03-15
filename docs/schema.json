@@ -43,30 +43,9 @@
           "pattern": ".*\\S.*",
           "description": "Output subfolder relative to selected download directory."
         },
-        "path": {
-          "default": "/",
-          "description": "Optional torrent-internal path. If omitted, null, or blank, behavior defaults to root (/). Non-root directory scope must end in /. Exact file paths are allowed only for .zip archive-selection behavior; other exact file paths are rejected.",
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "type": "string",
-              "pattern": "^\\s*$"
-            },
-            {
-              "type": "string",
-              "pattern": "^/$"
-            },
-            {
-              "type": "string",
-              "pattern": "^(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+/$"
-            },
-            {
-              "type": "string",
-              "pattern": "^(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+\\.zip$"
-            }
-          ]
+        "scope": {
+          "$ref": "#/$defs/sourceScope",
+          "description": "Optional torrent-internal selection scope. If omitted, behavior defaults to shallow root scope (/ with includeNestedFiles false)."
         },
         "torrents": {
           "type": "array",
@@ -80,38 +59,43 @@
           "description": "Optional rename rule. If omitted, no rename behavior is applied for this entry."
         },
         "unarchive": {
-          "type": "boolean",
-          "default": false,
-          "description": "Optional archive extraction flag for this entry. If omitted, behavior defaults to false."
-        },
-        "recursiveUnarchive": {
-          "type": "boolean",
-          "default": false,
-          "description": "Optional recursive archive extraction flag for this entry. If omitted, behavior defaults to false. Only applies when unarchive behavior is enabled for queued files."
+          "$ref": "#/$defs/unarchive",
+          "description": "Optional unarchive policy. If present, Files shows unarchive controls, the main unarchive toggle defaults on, and layout must be declared explicitly."
         },
         "ignore": {
           "$ref": "#/$defs/ignore"
         }
       },
-      "allOf": [
-        {
-          "if": {
-            "required": [
-              "recursiveUnarchive"
-            ]
-          },
-          "then": {
-            "required": [
-              "unarchive"
-            ],
-            "properties": {
-              "unarchive": {
-                "const": true
-              }
+      "additionalProperties": false
+    },
+    "sourceScope": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "description": "Torrent-internal scope path. Root is /. Non-root directory scope must end in /. Exact file paths are allowed only for .zip archive-selection behavior; other exact file paths are rejected.",
+          "type": "string",
+          "anyOf": [
+            {
+              "pattern": "^/$"
+            },
+            {
+              "pattern": "^(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+/$"
+            },
+            {
+              "pattern": "^(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+\\.zip$"
             }
-          }
+          ]
+        },
+        "includeNestedFiles": {
+          "type": "boolean",
+          "default": false,
+          "description": "Optional descendant-file inclusion flag. If omitted, only files directly inside scope.path are eligible."
         }
-      ]
+      },
+      "additionalProperties": false
     },
     "torrent": {
       "type": "object",
@@ -151,6 +135,61 @@
           "pattern": ".*\\S.*"
         }
       }
+    },
+    "unarchive": {
+      "type": "object",
+      "required": [
+        "layout"
+      ],
+      "properties": {
+        "recursive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Optional recursive archive extraction default. If omitted, behavior defaults to false."
+        },
+        "layout": {
+          "$ref": "#/$defs/unarchiveLayout"
+        }
+      },
+      "additionalProperties": false
+    },
+    "unarchiveLayout": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "flat",
+            "dedicatedFolder"
+          ]
+        },
+        "rename": {
+          "$ref": "#/$defs/rename",
+          "description": "Optional rename rule for the dedicated extract folder name."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "flat"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "rename"
+              ]
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
     },
     "ignore": {
       "type": "object",

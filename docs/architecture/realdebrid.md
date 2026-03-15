@@ -2,11 +2,11 @@
 
 ## Purpose
 
-`realdebrid/` owns all Real-Debrid-specific protocol behavior and encrypted API-token access. It exposes Romulus-shaped models to the rest of the app for token readiness, provider inventory, provider acquisition polling, unrestricted-link resolution, and exact `.zip` container lookup.
+`realdebrid/` owns all Real-Debrid-specific protocol behavior and encrypted API-token access. It exposes Romulus-shaped models to the rest of the app for token readiness, cached standard-browse inventory fills, provider acquisition polling, unrestricted-link resolution, and exact `.zip` container lookup.
 
 This package stays moderately concrete because spike evidence locked the execution stages:
 - token validation is separate from token persistence,
-- inventory enumeration is separate from selection,
+- exact-zip inventory enumeration is separate from selection,
 - acquisition polling is a first-class public seam for fresh start and resume,
 - unrestricted-link resolution is a later step after acquisition reports links ready,
 - exact `.zip` lookup reuses the same provider inventory and acquisition stages instead of inventing a side path.
@@ -17,8 +17,8 @@ This package stays moderately concrete because spike evidence locked the executi
 - Validate candidate tokens before saving them.
 - Expose masked-token and token-readiness state hydrated from storage.
 - Apply request budgeting so app-side concurrency does not oversubscribe the provider.
-- Enumerate provider inventory for one or more source torrents.
-- Select the correct provider file for a queue row or exact `.zip` path.
+- Enumerate provider inventory for cached standard browse fills and exact `.zip` lookup.
+- Select the correct provider file for a queued standard-file selection request or exact `.zip` path.
 - Expose provider acquisition as a first-class start-or-resume seam that surfaces waiting updates until links are ready.
 - Resolve ready links into app-shaped download units.
 
@@ -38,10 +38,12 @@ This package stays moderately concrete because spike evidence locked the executi
   - Live readiness of the saved token.
 - `ProviderSourceRef`
   - Source-owned torrent reference reshaped for Real-Debrid calls.
+- `ProviderSelectionRequest`
+  - Queue-owned standard-file selection contract derived from source-owned torrent metadata.
 - `ProviderInventory`
-  - Aggregated provider file list for one or more source torrents.
+  - Aggregated provider file list used for cached standard browse fills and exact-zip resolution.
 - `ProviderLocator`
-  - Stable locator data needed to re-resolve the same selected provider file later.
+  - Stable exact-zip selection contract needed to re-resolve the same outer archive file later without path-only fallback.
 - `ProviderResumeMarker`
   - Opaque marker needed to resume provider acquisition polling without resetting the `Preparing` deadline.
 - `ResolvedDownloadUnit`
@@ -55,8 +57,8 @@ This package stays moderately concrete because spike evidence locked the executi
 
 - Inbound dependencies:
   - `app/` and `ui/settings` for token save and token state.
-  - `source/` for provider inventory and exact `.zip` lookup.
-  - `downloads/` for standard-file resolution and provider acquisition.
+  - `source/` for exact `.zip` lookup.
+  - `downloads/` for standard-file provider acquisition and unrestricted-link resolution.
 - Outbound dependencies:
   - encrypted credential storage boundary,
   - Real-Debrid HTTP client boundary,
@@ -64,7 +66,7 @@ This package stays moderately concrete because spike evidence locked the executi
 - What may cross the root-package boundary:
   - masked token state,
   - token readiness,
-  - provider inventory,
+  - provider selection requests,
   - provider locators,
   - acquisition markers,
   - resolved download units.
@@ -79,11 +81,12 @@ This package stays moderately concrete because spike evidence locked the executi
 - `RealDebridFacade.observeTokenReadiness(): StateFlow<TokenReadiness>`
 - `RealDebridFacade.readTokenReadiness(): TokenReadiness`
 - `RealDebridFacade.saveValidatedToken(candidate: String): TokenSaveResult`
-- `RealDebridFacade.enumerateProviderFiles(request: ProviderInventoryRequest): Result<ProviderInventory>`
+- `RealDebridFacade.startAcquisition(request: ProviderSelectionRequest): Result<AcquisitionStatus>`
 - `RealDebridFacade.startAcquisition(locator: ProviderLocator): Result<AcquisitionStatus>`
 - `RealDebridFacade.resumeAcquisition(marker: ProviderResumeMarker): Result<AcquisitionStatus>`
 - `RealDebridFacade.resolveReadyLink(link: ProviderReadyLink): Result<ResolvedDownloadUnit>`
-- `RealDebridFacade.resolveExactZip(request: ExactZipRequest): Result<ArchiveContainerLocator>`
+- `RealDebridFacade.findExactZipMatch(request: ExactZipRequest): Result<ProviderFileRecord>`
+- `RealDebridFacade.materializeArchiveContainer(exactMatch: ProviderFileRecord, acquisitionStatus: AcquisitionStatus.LinksReady): Result<ArchiveContainerLocator>`
 
 ## Internal Structure
 
@@ -97,7 +100,7 @@ This package stays moderately concrete because spike evidence locked the executi
   - token-readiness projection.
 - What it must not own:
   - queue rows,
-  - provider inventory,
+  - standard browse metadata,
   - download execution.
 - Sibling interaction:
   - feeds token state to inventory, acquisition, and link services.
@@ -128,18 +131,19 @@ This package stays moderately concrete because spike evidence locked the executi
 
 ### `realdebrid/inventory`
 
-- Purpose: turn one or more source torrents into a Romulus-shaped provider inventory.
+- Purpose: turn one or more source torrents into a Romulus-shaped provider inventory for cached standard browse fills and exact-zip resolution.
 - What it owns:
   - host selection,
   - torrent registration,
   - provider file enumeration,
+  - temporary browse-torrent cleanup,
   - locator construction.
 - What it must not own:
   - queue state,
   - browse filtering,
   - output policy.
 - Sibling interaction:
-  - used by `source/` and `downloads/`.
+  - used by `ExactZipResolver` only.
 - What may cross this seam:
   - `ProviderInventory`,
   - `ProviderLocator`.
@@ -159,7 +163,8 @@ This package stays moderately concrete because spike evidence locked the executi
   - queue timeout policy,
   - output writes.
 - Sibling interaction:
-  - inventory provides locators,
+  - standard-file acquisition starts from queue-owned `ProviderSelectionRequest`,
+  - inventory provides locators for exact-zip resolution,
   - links resolve final unrestricted URLs after links become ready.
 - What may cross this seam:
   - `ProviderResumeMarker`,
@@ -208,11 +213,14 @@ class RealDebridFacade(
     fun observeTokenReadiness(): StateFlow<TokenReadiness>
     suspend fun readTokenReadiness(): TokenReadiness
     suspend fun saveValidatedToken(candidate: String): TokenSaveResult
-    suspend fun enumerateProviderFiles(request: ProviderInventoryRequest): Result<ProviderInventory>
-    suspend fun startAcquisition(locator: ProviderLocator): Result<AcquisitionStatus>
+    suspend fun startAcquisition(request: ProviderSelectionRequest): Result<AcquisitionStatus>
     suspend fun resumeAcquisition(marker: ProviderResumeMarker): Result<AcquisitionStatus>
     suspend fun resolveReadyLink(link: ProviderReadyLink): Result<ResolvedDownloadUnit>
-    suspend fun resolveExactZip(request: ExactZipRequest): Result<ArchiveContainerLocator>
+    suspend fun findExactZipMatch(request: ExactZipRequest): Result<ProviderFileRecord>
+    suspend fun materializeArchiveContainer(
+        exactMatch: ProviderFileRecord,
+        acquisitionStatus: AcquisitionStatus.LinksReady
+    ): Result<ArchiveContainerLocator>
 }
 ```
 
@@ -318,30 +326,11 @@ data class ProviderSourceRef(
     val partLabel: String?
 )
 
-data class ProviderInventoryRequest(
-    val sources: List<ProviderSourceRef>
-)
-
-data class ProviderFileRecord(
-    val providerFileId: String,
-    val originalName: String,
-    val path: String,
-    val sizeBytes: Long?,
-    val partLabel: String?,
-    val locator: ProviderLocator
-)
-
-data class ProviderLocator(
+data class ProviderSelectionRequest(
     val sourceMagnetUri: String,
-    val torrentId: String,
-    val providerFileIds: List<String>,
-    val selectedProviderFileId: String,
-    val path: String,
-    val partLabel: String?
-)
-
-data class ProviderInventory(
-    val files: List<ProviderFileRecord>
+    val normalizedPath: String,
+    val sizeBytes: Long?,
+    val occurrenceIndex: Int
 )
 
 data class ProviderResumeMarker(
@@ -351,7 +340,6 @@ data class ProviderResumeMarker(
 )
 
 data class ProviderReadyLink(
-    val providerFileId: String,
     val restrictedUrl: String
 )
 
@@ -378,6 +366,15 @@ data class ExactZipRequest(
     val exactPath: String
 )
 
+data class ProviderLocator(
+    val sourceMagnetUri: String,
+    val torrentId: String,
+    val providerFileIds: List<String>,
+    val selectedProviderFileId: String,
+    val path: String,
+    val partLabel: String?
+)
+
 data class ArchiveContainerLocator(
     val archiveUrl: String,
     val originalName: String,
@@ -387,8 +384,9 @@ data class ArchiveContainerLocator(
 
 ### `TorrentInventoryService.kt`
 - Internal area: `realdebrid/inventory`
-- Purpose: enumerate provider files for one or more source torrents.
+- Purpose: enumerate provider files for exact-zip resolution.
 - Responsibility: follow the host-selection and torrent-registration flow proven by the spike.
+- Inventory-built `ProviderLocator.providerFileIds` and `selectedProviderFileId` are exact-zip selection ids derived deterministically from the provider file list, not raw Real-Debrid file ids. Fresh acquisition must re-derive those opaque ids from the new torrent before selecting provider-side file ids.
 - Depends on: HTTP client boundary, `RequestBudget`
 - Must not depend on: queue stores
 - Visibility: `internal`
@@ -406,7 +404,8 @@ class TorrentInventoryService(
 ### `ProviderSelectionService.kt`
 - Internal area: `realdebrid/acquisition`
 - Purpose: select the correct provider file set for one queue row.
-- Responsibility: start or verify provider-side selection for the exact locator passed in from source or queue state.
+- Responsibility: start or verify provider-side selection for the exact queued standard-file request or exact-zip locator passed in from `downloads/` or `realdebrid/links`.
+- Selection must fail explicitly when the queued standard-file request or exact-zip locator cannot be re-derived from the fresh torrent; it must not fall back to matching by path alone.
 - Depends on: `RequestBudget`, `RealDebridApi`
 - Must not depend on: queue stores
 - Visibility: `internal`
@@ -417,6 +416,7 @@ class ProviderSelectionService(
     private val budget: RequestBudget,
     private val api: RealDebridApi
 ) {
+    suspend fun start(request: ProviderSelectionRequest): Result<ProviderResumeMarker>
     suspend fun start(locator: ProviderLocator): Result<ProviderResumeMarker>
     suspend fun verify(marker: ProviderResumeMarker): Result<ProviderResumeMarker>
 }
@@ -437,6 +437,7 @@ class ProviderAcquisitionPoller(
     private val budget: RequestBudget,
     private val api: RealDebridApi
 ) {
+    suspend fun start(request: ProviderSelectionRequest): Result<AcquisitionStatus>
     suspend fun start(locator: ProviderLocator): Result<AcquisitionStatus>
     suspend fun resume(marker: ProviderResumeMarker): Result<AcquisitionStatus>
 }
@@ -462,8 +463,8 @@ class UnrestrictedLinkResolver(
 
 ### `ExactZipResolver.kt`
 - Internal area: `realdebrid/links`
-- Purpose: resolve the exact provider file that backs archive-selection mode.
-- Responsibility: reuse inventory and acquisition stages, then return an outer `.zip` locator without enumerating the archive itself.
+- Purpose: support exact `.zip` archive-selection matching and ready-container materialization.
+- Responsibility: find the exact provider file that backs archive-selection mode and turn a ready provider acquisition result into an unrestricted outer `.zip` locator without enumerating the archive itself.
 - Depends on: `TorrentInventoryService`, `ProviderAcquisitionPoller`, `RequestBudget`, `RealDebridApi`
 - Must not depend on: `remotezip/`
 - Visibility: `internal`
@@ -476,7 +477,11 @@ class ExactZipResolver(
     private val budget: RequestBudget,
     private val api: RealDebridApi
 ) {
-    suspend fun resolve(request: ExactZipRequest): Result<ArchiveContainerLocator>
+    suspend fun findMatch(request: ExactZipRequest): Result<ProviderFileRecord>
+    suspend fun materialize(
+        exactMatch: ProviderFileRecord,
+        acquisitionStatus: AcquisitionStatus.LinksReady
+    ): Result<ArchiveContainerLocator>
 }
 ```
 
@@ -487,22 +492,30 @@ class ExactZipResolver(
    - Only a successfully validated candidate replaces the prior saved token.
    - Masked-token and token-readiness flows hydrate from persisted storage on startup.
 
-2. Provider inventory:
+2. Exact-zip inventory:
    - `TorrentInventoryService` iterates `ProviderSourceRef` values.
-   - For each source it performs host selection, torrent registration, and file enumeration.
+   - For each source it performs host selection from Real-Debrid's `availableHosts` objects, torrent registration, and file enumeration.
    - It aggregates files into one `ProviderInventory` without leaking raw API models.
 
 3. Standard-file resolution:
-   - `downloads/` passes a `ProviderLocator` captured at enqueue time.
-   - `ProviderSelectionService` verifies or starts selection for that locator.
+   - `downloads/` passes a `ProviderSelectionRequest` derived from the queue-stored torrent-native selection intent.
+   - `ProviderSelectionService` starts selection for that request by re-deriving the matching provider file on a fresh provider torrent.
    - `ProviderAcquisitionPoller` is called through `startAcquisition(...)` or `resumeAcquisition(...)` and emits waiting updates until provider links are ready.
    - `downloads/attempts` persists the waiting status, progress, and resume marker while it owns `Preparing`.
    - Once links are ready, `downloads/attempts` selects the matching `ProviderReadyLink` and calls `resolveReadyLink(...)`.
 
 4. Exact `.zip` resolution:
    - `source/` requests `ExactZipRequest`.
-   - `ExactZipResolver` enumerates provider files, finds the exact matching `.zip`, runs acquisition if needed, and returns `ArchiveContainerLocator`.
+   - `ExactZipResolver` enumerates provider files and finds the exact matching outer `.zip`.
+   - `source/` persists the matched file plus the provider-acquisition resume marker while the container is still preparing and retains that shared preparation record after the container becomes ready.
+   - Later revisits call `resumeAcquisition(...)` on that same saved marker instead of starting a new provider torrent.
+   - Once provider links are ready, `ExactZipResolver` materializes one unrestricted outer-container URL.
    - `remotezip/` later enumerates or copies the archive; `realdebrid/` stops at providing the container URL and locator.
+
+5. Archive-entry execution refresh:
+   - `downloads/attempts` asks the shared source-owned archive-preparation service for the ready outer container using the queue-stored preparation key.
+   - That service resumes the saved provider marker for the exact outer archive instead of starting a new provider torrent when the existing acquisition is still valid.
+   - `remotezip/` reopens the archive from the refreshed URL and copies only the selected internal entry.
 
 ## Failure and Recovery Rules
 
@@ -553,7 +566,8 @@ class ExactZipResolver(
 
 - Scope: unit
 - Covers:
-  - selection start
+  - request-based selection start
+  - locator-based selection start for exact-zip reuse
   - selection verify
   - selected provider-file ids remain stable
 - Fixtures:
@@ -592,7 +606,6 @@ class ExactZipResolver(
   - exact-path-not-found failure
 - Fixtures:
   - fake `TorrentInventoryService`
-  - fake `ProviderAcquisitionPoller`
   - fake `RealDebridApi`
 
 ## Open Questions or Deferred Decisions

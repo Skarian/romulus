@@ -30,13 +30,14 @@
    - last provider progress when available,
    - enough provider checkpoint data to resume polling without resetting the deadline.
 8. Resume continues from the latest saved checkpoint instead of restarting from zero.
-9. Process interruption must not reset `Preparing` timing or its 24-hour deadline.
-10. Manual `Retry` and `Restart` start a fresh `Preparing` window when provider-side acquisition is needed again.
-11. Queue summary counters remain stable across app restarts.
-12. Download row visibility metadata is persisted so rows cleared from Downloads stay hidden across app restarts; clear-history behavior follows [`downloads.md`](downloads.md).
-13. When diagnostics is enabled, diagnostics artifacts are persisted with bounded retention and rotation semantics defined in [`diagnostics.md`](diagnostics.md).
-14. `Clear diagnostics` removes diagnostics artifacts from internal diagnostics storage and removes previously exported diagnostics bundles from app-specific external diagnostics export storage.
-15. Diagnostics export bundles persist in app-specific external diagnostics export storage with retention of latest `3` until the user clears diagnostics; export behavior follows [`diagnostics.md`](diagnostics.md).
+9. If interruption happens after a reserved artifact is fully written but before finalization state is durably entered, recovery resumes local finalization when completion can be proven from the persisted reservation plus the completed artifact on disk.
+10. Process interruption must not reset `Preparing` timing or its 24-hour deadline.
+11. Manual `Retry` and `Restart` start a fresh `Preparing` window when provider-side acquisition is needed again.
+12. Queue summary counters remain stable across app restarts.
+13. Download row visibility metadata is persisted so rows cleared from Downloads stay hidden across app restarts; clear-history behavior follows [`downloads.md`](downloads.md).
+14. When diagnostics is enabled, diagnostics artifacts are persisted with bounded retention and rotation semantics defined in [`diagnostics.md`](diagnostics.md).
+15. `Clear diagnostics` removes retained diagnostics artifacts from internal diagnostics storage only.
+16. Diagnostics export writes one bundle to the user-selected destination returned by the Android document picker; previously exported user-owned files are not tracked or deleted by the app.
 
 ## Failure Behavior
 

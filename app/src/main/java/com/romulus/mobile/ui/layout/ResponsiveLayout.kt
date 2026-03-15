@@ -1,3 +1,5 @@
+@file:Suppress("MagicNumber", "MatchingDeclarationName")
+
 package com.romulus.mobile.ui.layout
 
 import androidx.compose.foundation.background
@@ -8,10 +10,12 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
@@ -35,33 +39,33 @@ fun rememberResponsiveMetrics(): ResponsiveMetrics {
     return when {
         widthDp >= 960 -> ResponsiveMetrics(
             horizontalPadding = 40.dp,
-            verticalPadding = 32.dp,
-            sectionSpacing = 24.dp,
+            verticalPadding = 34.dp,
+            sectionSpacing = 28.dp,
             contentSpacing = 20.dp,
             maxContentWidth = 900.dp
         )
 
         widthDp >= 720 -> ResponsiveMetrics(
             horizontalPadding = 32.dp,
-            verticalPadding = 24.dp,
-            sectionSpacing = 20.dp,
+            verticalPadding = 26.dp,
+            sectionSpacing = 24.dp,
             contentSpacing = 16.dp,
             maxContentWidth = 760.dp
         )
 
         widthDp >= 520 -> ResponsiveMetrics(
             horizontalPadding = 24.dp,
-            verticalPadding = 20.dp,
-            sectionSpacing = 16.dp,
+            verticalPadding = 22.dp,
+            sectionSpacing = 18.dp,
             contentSpacing = 14.dp,
             maxContentWidth = 640.dp
         )
 
         else -> ResponsiveMetrics(
-            horizontalPadding = 16.dp,
-            verticalPadding = 16.dp,
-            sectionSpacing = 12.dp,
-            contentSpacing = 10.dp,
+            horizontalPadding = 18.dp,
+            verticalPadding = 18.dp,
+            sectionSpacing = 14.dp,
+            contentSpacing = 12.dp,
             maxContentWidth = 480.dp
         )
     }
@@ -72,30 +76,44 @@ fun ResponsiveScreenContainer(
     modifier: Modifier = Modifier,
     metrics: ResponsiveMetrics = rememberResponsiveMetrics(),
     scrollable: Boolean = false,
+    respectStatusBar: Boolean = false,
+    compactVerticalPadding: Boolean = false,
     verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(metrics.contentSpacing),
     content: @Composable ColumnScope.(ResponsiveMetrics) -> Unit
 ) {
+    val verticalPadding = if (compactVerticalPadding) {
+        8.dp
+    } else {
+        metrics.verticalPadding
+    }
     val contentModifier = Modifier
         .fillMaxWidth()
         .widthIn(max = metrics.maxContentWidth)
-        .padding(horizontal = metrics.horizontalPadding, vertical = metrics.verticalPadding)
+        .then(if (respectStatusBar) Modifier.statusBarsPadding() else Modifier)
+        .padding(horizontal = metrics.horizontalPadding, vertical = verticalPadding)
     val scrollModifier = if (scrollable) {
         Modifier.verticalScroll(rememberScrollState())
     } else {
         Modifier
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.TopCenter
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground
     ) {
-        Column(
-            modifier = contentModifier.then(scrollModifier),
-            verticalArrangement = verticalArrangement
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.TopCenter
         ) {
-            content(metrics)
+            Column(
+                modifier = contentModifier.then(scrollModifier),
+                verticalArrangement = verticalArrangement
+            ) {
+                content(metrics)
+            }
         }
     }
 }
