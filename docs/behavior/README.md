@@ -1,6 +1,6 @@
 # Behavior Specs
 
-This folder is the behavior source of truth for migration.
+This folder is the behavior source of truth for current user-visible behavior.
 
 ## How To Read These Files
 
@@ -25,3 +25,5 @@ Each spec is written as:
 12. [`status-model.md`](status-model.md)
 13. [`naming.md`](naming.md)
 14. [`persistence.md`](persistence.md)
+
+Migration history and implementation planning are tracked elsewhere. These files describe the runtime contract users should experience today.

@@ -1,15 +1,17 @@
-# BEHAVIOR - Migration Contracts
+# BEHAVIOR
 
-This document defines what the app must do for users.
-It is intentionally implementation-agnostic.
+This document indexes the user-visible behavior contract for the shipped app.
+It stays implementation-agnostic and should be updated whenever runtime behavior changes materially.
 
-## 1. Contract Rule
+## Contract Rules
 
-1. Preserve behavior parity, not system parity.
-2. Keep contracts at user-visible intent level.
-3. Internal timings, caching, and algorithm choices may change unless a user-visible outcome depends on them.
+1. Behavior docs define user-visible outcomes, not internal code shape.
+2. Preserve behavior parity, not system parity.
+3. Internal timings, caching, storage, and algorithms may change unless they affect a user-visible outcome.
+4. Source JSON shape lives in [`schema.json`](schema.json); runtime handling of valid or invalid input lives in [`behavior/source.md`](behavior/source.md).
+5. If implementation changes user-visible behavior, update these docs in the same work.
 
-## 2. Behavior Spec Set
+## Behavior Spec Set
 
 1. [`behavior/setup.md`](behavior/setup.md)
 2. [`behavior/source.md`](behavior/source.md)
@@ -26,36 +28,15 @@ It is intentionally implementation-agnostic.
 13. [`behavior/naming.md`](behavior/naming.md)
 14. [`behavior/persistence.md`](behavior/persistence.md)
 
-## 3. Source Contract
+## Stable Boundaries
 
-1. Source JSON shape is defined in [`schema.json`](schema.json).
-2. Schema captures input structure.
-3. Runtime behavior on valid or invalid input is defined in [`behavior/source.md`](behavior/source.md).
-
-## 4. Contract Boundaries
-
-Required boundaries:
 1. Setup gating remains mandatory.
-2. Downloads retain recoverability actions for visible tasks; user-confirmed history clear may hide terminal tasks from the default list.
-3. Queue state remains durable across process death.
+2. Queue state remains durable across process death.
+3. Downloads retain recoverability actions for visible tasks; user-confirmed history clear may hide terminal tasks from the default list.
 4. Credential handling remains protected.
+5. Diagnostics capture, notification copy, naming, and persistence semantics are defined by their dedicated behavior docs.
 
-Flexible boundaries:
-1. Screens and controls may be merged if user outcomes stay the same.
-2. Internal orchestration and storage internals may be replaced.
-3. State complexity may be reduced when outcomes remain clear.
+## Historical Context
 
-## 5. Intentional Differences from Current App
-
-1. Current Setup behavior is a multi-step flow with step navigation; current contract intentionally uses single-screen setup.
-2. Current source ingest can keep valid entries while skipping invalid entries; current contract intentionally enforces all-or-nothing source validity.
-3. Current Home behavior still has duplicate-name disambiguation and alphabetical sorting; current contract intentionally uses JSON order and exact names.
-4. Current Files behavior still always shows `Apply rename`; current contract intentionally scopes it to entries with rename regex and keeps row names original.
-5. Current Files failure behavior does not expose an explicit retry action; current contract intentionally requires a visible `Retry` action.
-6. Current Downloads behavior still exposes detailed status tags and `Delete partial`; current contract intentionally simplifies status language, adds explicit `Preparing` behavior for provider-side acquisition with a 24-hour cap, and keeps cleanup under `Restart`.
-7. Current Settings behavior still exposes manual refresh and wider concurrency limits; current contract intentionally removes manual refresh from Settings, sets fresh-setup default concurrency to `5`, and bounds concurrency to `1..50`.
-8. Notification behavior intentionally preserves terse status-only copy before bytes start moving, byte-first progress copy once downloads are active, and exact completion titles (`Downloads complete` or `Downloads finished`).
-9. Current Downloads behavior has no history-clear action; current contract adds `Clear history` to hide terminal rows without deleting app data, without unhide.
-10. Current docs define an optional entry-level `unarchive` object with required layout policy, Files-page overrides, flat or dedicated-folder extraction, recursive extraction option, and archive cleanup behavior.
-11. Current app does not yet provide archive-selection mode for exact `.zip` source paths; current docs add remote internal-file selection and queueing behavior for this roadmap mode.
-12. Current app does not yet provide the diagnostics contract; current docs add structured diagnostics capture, bounded retention, clear and export controls, and support-ready bundles.
+Migration planning and cutover history now live in [`MIGRATION.md`](MIGRATION.md), archived ExecPlans, and git history.
+This file and the specs under [`behavior/`](behavior/README.md) describe current behavior.

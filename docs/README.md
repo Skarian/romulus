@@ -1,32 +1,38 @@
 # Docs Workspace
 
-This folder is independent from Android runtime code and is used to iterate on behavior and architecture contracts.
+This folder holds the product, behavior, and architecture docs for the shipped app, plus historical migration and spike material.
 
-## Canonical Docs
+## Current Runtime Docs
 
 1. [`PRD.md`](PRD.md) - product goals and simplification intent.
 2. [`BEHAVIOR.md`](BEHAVIOR.md) - behavior contract index.
-3. [`ARCHITECTURE.md`](ARCHITECTURE.md) - simplified runtime design.
-4. [`MIGRATION.md`](MIGRATION.md) - behavior-first migration plan.
-5. [`architecture/SPIKE.md`](architecture/SPIKE.md) - pre-architecture spike goals and gates.
-6. [`spikes/specs/README.md`](spikes/specs/README.md) - executable spike specs for Spikes 1-4.
-7. [`spikes/apps/README.md`](spikes/apps/README.md) - intended spike harness and operator-surface docs.
-8. [`spikes/research/README.md`](spikes/research/README.md) - reference module research notes for spike preparation.
-9. [`spikes/fixtures/README.md`](spikes/fixtures/README.md) - spike fixture inventory and local generation workflow.
-10. [`spikes/outputs/README.md`](spikes/outputs/README.md) - required spike output docs that feed architecture buildout.
-11. [`schema.json`](schema.json) - source input contract.
-12. [`behavior/README.md`](behavior/README.md) - detailed behavior specs.
+3. [`ARCHITECTURE.md`](ARCHITECTURE.md) - runtime ownership and package boundaries.
+4. [`schema.json`](schema.json) - source input contract.
+5. [`behavior/README.md`](behavior/README.md) - detailed behavior specs.
+6. [`architecture/app.md`](architecture/app.md) - composition root and startup ownership.
+7. [`architecture/ui.md`](architecture/ui.md) - presentation ownership.
+8. [`architecture/source.md`](architecture/source.md) - source ingestion, snapshots, and browse ownership.
+9. [`architecture/downloads.md`](architecture/downloads.md) - queue, execution, and output ownership.
+10. [`architecture/realdebrid.md`](architecture/realdebrid.md) - Real-Debrid boundary ownership.
+11. [`architecture/remotezip.md`](architecture/remotezip.md) - remote ZIP boundary ownership.
+12. [`architecture/diagnostics.md`](architecture/diagnostics.md) - diagnostics ownership.
+13. [`architecture/diagram/diagrams/app-architecture.mmd`](architecture/diagram/diagrams/app-architecture.mmd) - canonical high-level runtime diagram.
+
+## Historical Context
+
+1. [`MIGRATION.md`](MIGRATION.md) - migration plan and cutover history.
+2. [`architecture/SPIKE.md`](architecture/SPIKE.md) - spike gates used before the runtime was finalized.
+3. [`spikes/specs/README.md`](spikes/specs/README.md) - executable spike specs.
+4. [`spikes/apps/README.md`](spikes/apps/README.md) - spike harness docs.
+5. [`spikes/research/README.md`](spikes/research/README.md) - research notes.
+6. [`spikes/fixtures/README.md`](spikes/fixtures/README.md) - fixture inventory and generation workflow.
+7. [`spikes/outputs/README.md`](spikes/outputs/README.md) - spike result artifacts.
 
 ## Structure
 
 1. `behavior/` - behavior contracts.
-2. `architecture/SPIKE.md` - spike plan and pass/fail criteria.
-3. `spikes/specs/` - spike execution specs.
-4. `spikes/apps/` - intended spike harness and operator-surface docs.
-5. `spikes/research/` - reference module research notes.
-6. `spikes/fixtures/` - fixture inventory and generated local spike inputs.
-7. `spikes/outputs/` - spike result artifacts for architecture buildout.
-8. `architecture/diagram/` - Mermaid diagram viewer and diagram assets.
+2. `architecture/` - runtime ownership docs and the diagram viewer.
+3. `spikes/` - historical spike specs, apps, fixtures, and outputs.
 
 ## Run the Viewer
 
