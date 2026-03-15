@@ -23,10 +23,10 @@
 9. When Downloads has no visible rows, the page shows `No active downloads`, both before any queue rows exist and after `Clear history` hides all visible terminal rows.
 10. User-visible row status labels and their state-to-label mapping are defined in [`status-model.md`](status-model.md).
 11. Downloads list rows show compact status and progress appropriate to the current state:
-   - `Queued`, `Resolving`, and `Retry Scheduled` do not require a percent label,
-   - `Preparing` shows Real-Debrid progress when available; otherwise it shows the `Preparing` state without fake byte progress,
-   - `Running` shows local percent label (`--%` when total size is unknown) and local byte progress,
-   - `Paused` preserves the last known local percent and byte counts and shows `Paused`.
+   - `Queued`, `Resolving`, `Retry Scheduled`, `Done`, `Failed`, and `Cancelled` show only the status tag,
+   - `Preparing` shows Real-Debrid progress when available; otherwise it shows only the `Preparing` status tag without fake progress,
+   - `Running` shows local percent label (`--%` when total size is unknown) above the `Downloading` status tag,
+   - `Paused` preserves the last known local percent and byte counts and shows that percent above the `Paused` status tag.
 12. Download details modal always shows:
    - source entry,
    - original file name,
