@@ -10,16 +10,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -32,12 +29,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.romulus.mobile.ui.components.RomulusAlertDialog
+import com.romulus.mobile.ui.components.RomulusButtonText
+import com.romulus.mobile.ui.components.RomulusDialogActionText
+import com.romulus.mobile.ui.components.RomulusDialogBodyText
+import com.romulus.mobile.ui.components.RomulusDialogTitle
+import com.romulus.mobile.ui.components.RomulusFieldLabel
+import com.romulus.mobile.ui.components.RomulusIconButton
 import com.romulus.mobile.ui.components.TableDataRow
-import com.romulus.mobile.ui.components.TableHeaderRow
 import com.romulus.mobile.ui.files.FilesRouteArgs
 import com.romulus.mobile.ui.layout.ResponsiveScreenContainer
 import kotlinx.coroutines.flow.collect
@@ -74,17 +79,27 @@ fun HomeScreen(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = viewModel::openSearch) {
-                    Icon(imageVector = Icons.Filled.Search, contentDescription = "Search source")
-                }
-                if (state.refreshVisible) {
-                    IconButton(onClick = viewModel::refresh) {
+                Text(
+                    text = "Sources",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RomulusIconButton(onClick = viewModel::openSearch) {
                         Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = "Refresh source"
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = "Search source"
                         )
+                    }
+                    if (state.refreshVisible) {
+                        RomulusIconButton(onClick = viewModel::refresh) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = "Refresh source"
+                            )
+                        }
                     }
                 }
             }
@@ -105,7 +120,7 @@ fun HomeScreen(
                     )
                     if (mode.retryVisible) {
                         TextButton(onClick = viewModel::refresh) {
-                            Text("Retry")
+                            RomulusButtonText("Retry")
                         }
                     }
                 }
@@ -152,20 +167,12 @@ private fun ColumnScope.HomeContentSection(
         )
     }
 
-    TableHeaderRow {
-        Text(
-            text = "Source",
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.labelLarge
-        )
-        Text(
-            text = "",
-            modifier = Modifier.width(40.dp)
-        )
-    }
-
     if (mode.rows.isEmpty()) {
-        Text("No sources available")
+        Text(
+            text = "No sources available",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     } else {
         LazyColumn(
             modifier = Modifier.weight(1f),
@@ -177,10 +184,14 @@ private fun ColumnScope.HomeContentSection(
                         text = row.displayName,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleSmall
                     )
-                    IconButton(
-                        modifier = Modifier.size(24.dp),
+                    RomulusIconButton(
+                        modifier = Modifier.size(28.dp),
+                        containerColor = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        outlined = false,
                         onClick = { onOpenDetails(row.routeArgs.entryId.value) }
                     ) {
                         Icon(
@@ -196,39 +207,39 @@ private fun ColumnScope.HomeContentSection(
 
 @Composable
 private fun HomeSourceDetailsDialog(row: HomeRowModel, onDismiss: () -> Unit) {
-    AlertDialog(
+    RomulusAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(row.displayName) },
+        title = { RomulusDialogTitle(row.displayName) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Output folder: ${row.details.outputFolder}")
-                Text("Scope path: ${row.details.scopePath}")
-                Text(
+                RomulusDialogBodyText("Output folder: ${row.details.outputFolder}")
+                RomulusDialogBodyText("Scope path: ${row.details.scopePath}")
+                RomulusDialogBodyText(
                     text = "Include nested files: ${
                         if (row.details.includeNestedFiles) "Yes" else "No"
                     }"
                 )
-                Text("Torrent parts: ${row.details.torrentPartCount}")
+                RomulusDialogBodyText("Torrent parts: ${row.details.torrentPartCount}")
                 if (row.details.partLabels.isNotEmpty()) {
-                    Text("Part labels: ${row.details.partLabels.joinToString()}")
+                    RomulusDialogBodyText("Part labels: ${row.details.partLabels.joinToString()}")
                 }
-                Text(
+                RomulusDialogBodyText(
                     text = "Ignore rules: ${
                         row.details.ignoreRuleCount.takeIf { it > 0 } ?: "None"
                     }"
                 )
-                Text(
+                RomulusDialogBodyText(
                     text = "Rename rule: ${
                         if (row.details.renameAvailable) "On" else "Off"
                     }"
                 )
-                Text(
+                RomulusDialogBodyText(
                     text = "Unarchive: ${
                         if (row.details.unarchiveAvailable) "On" else "Off"
                     }"
                 )
                 row.details.recursiveUnarchiveDefault?.let { recursive ->
-                    Text(
+                    RomulusDialogBodyText(
                         text = "Recursive unarchive default: ${
                             if (recursive) "On" else "Off"
                         }"
@@ -238,7 +249,7 @@ private fun HomeSourceDetailsDialog(row: HomeRowModel, onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close")
+                RomulusDialogActionText("Close")
             }
         }
     )
@@ -251,26 +262,26 @@ private fun HomeSearchDialog(
     onClose: () -> Unit,
     onClear: () -> Unit
 ) {
-    AlertDialog(
+    RomulusAlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Search") },
+        title = { RomulusDialogTitle("Search") },
         text = {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onUpdateSearchQuery,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Find source entry") },
+                label = { RomulusFieldLabel("Find source entry") },
                 singleLine = true
             )
         },
         confirmButton = {
             TextButton(onClick = onClose) {
-                Text("Done")
+                RomulusDialogActionText("Done")
             }
         },
         dismissButton = {
             TextButton(onClick = onClear) {
-                Text("Clear")
+                RomulusDialogActionText("Clear")
             }
         }
     )

@@ -3,12 +3,14 @@
 package com.romulus.mobile.ui.downloads
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,12 +19,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -36,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,8 +47,16 @@ import com.romulus.mobile.downloads.queue.QueueActionCommand
 import com.romulus.mobile.downloads.queue.QueueActionKind
 import com.romulus.mobile.downloads.queue.QueuePresentationState
 import com.romulus.mobile.downloads.queue.TaskId
+import com.romulus.mobile.ui.components.RomulusAlertDialog
+import com.romulus.mobile.ui.components.RomulusButtonText
+import com.romulus.mobile.ui.components.RomulusDialogActionText
+import com.romulus.mobile.ui.components.RomulusDialogBodyText
+import com.romulus.mobile.ui.components.RomulusDialogTitle
+import com.romulus.mobile.ui.components.RomulusIconButton
 import com.romulus.mobile.ui.components.TableDataRow
 import com.romulus.mobile.ui.components.TableHeaderRow
+import com.romulus.mobile.ui.components.romulusButtonColors
+import com.romulus.mobile.ui.components.warmOverlayColor
 import com.romulus.mobile.ui.formatByteCount
 import com.romulus.mobile.ui.formatByteCountOrUnknown
 import com.romulus.mobile.ui.formatTimestamp
@@ -92,7 +102,7 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = "Downloads",
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleLarge
                     )
                     if (summaryLabel.isNotEmpty()) {
                         Text(
@@ -102,8 +112,11 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
                         )
                     }
                 }
-                TextButton(onClick = viewModel::openClearHistory) {
-                    Text("Clear history")
+                Button(
+                    onClick = viewModel::openClearHistory,
+                    colors = romulusButtonColors()
+                ) {
+                    RomulusButtonText("Clear history")
                 }
             }
 
@@ -126,7 +139,11 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
             }
 
             if (state.projection.rows.isEmpty()) {
-                Text("No active downloads")
+                Text(
+                    text = "No active downloads",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
@@ -146,32 +163,42 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
     }
 
     selectedDetail?.let { row ->
-        AlertDialog(
+        RomulusAlertDialog(
             onDismissRequest = viewModel::dismissDetails,
-            title = { Text(row.originalDisplayName) },
+            title = { RomulusDialogTitle(row.originalDisplayName) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Source entry: ${row.details.sourceEntry}")
-                    Text("Original file: ${row.originalDisplayName}")
-                    Text("Output target: ${row.details.outputSummary}")
-                    Text("Created: ${row.createdAt.formatTimestamp()}")
-                    Text("Updated: ${row.details.updatedAt.formatTimestamp()}")
-                    Text(
+                    RomulusDialogBodyText("Source entry: ${row.details.sourceEntry}")
+                    RomulusDialogBodyText("Original file: ${row.originalDisplayName}")
+                    RomulusDialogBodyText("Output target: ${row.details.outputSummary}")
+                    RomulusDialogBodyText("Created: ${row.createdAt.formatTimestamp()}")
+                    RomulusDialogBodyText("Updated: ${row.details.updatedAt.formatTimestamp()}")
+                    RomulusDialogBodyText(
                         text = "File size: " +
                             row.details.originalSizeBytes.formatByteCountOrUnknown()
                     )
-                    Text("Download sub-folder: ${row.details.outputSubfolder ?: "N/A"}")
-                    Text("State: ${row.details.currentState}")
-                    Text("Failure reason: ${row.details.failureReason ?: "N/A"}")
-                    Text("Part: ${row.details.partLabel ?: "N/A"}")
+                    RomulusDialogBodyText(
+                        "Download sub-folder: ${row.details.outputSubfolder ?: "N/A"}"
+                    )
+                    RomulusDialogBodyText("State: ${row.details.currentState}")
+                    RomulusDialogBodyText(
+                        "Failure reason: ${row.details.failureReason ?: "N/A"}"
+                    )
+                    RomulusDialogBodyText("Part: ${row.details.partLabel ?: "N/A"}")
                     row.details.attemptCount?.let { attemptCount ->
-                        Text("Attempt count: $attemptCount")
+                        RomulusDialogBodyText("Attempt count: $attemptCount")
                     }
                     row.details.preparing?.let { preparing ->
-                        Text("Preparing started: ${preparing.enteredAt.formatTimestamp()}")
-                        Text("Timeout deadline: ${preparing.timeoutAt.formatTimestamp()}")
-                        Text("Provider status: ${preparing.lastProviderStatus ?: "N/A"}")
-                        Text(
+                        RomulusDialogBodyText(
+                            "Preparing started: ${preparing.enteredAt.formatTimestamp()}"
+                        )
+                        RomulusDialogBodyText(
+                            "Timeout deadline: ${preparing.timeoutAt.formatTimestamp()}"
+                        )
+                        RomulusDialogBodyText(
+                            "Provider status: ${preparing.lastProviderStatus ?: "N/A"}"
+                        )
+                        RomulusDialogBodyText(
                             text = "Provider progress: ${
                                 preparing.lastProviderProgress?.toInt()?.let { progress ->
                                     "$progress%"
@@ -184,7 +211,7 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
                             downloadedBytes = transfer.downloadedBytes,
                             totalBytes = transfer.totalBytes
                         )
-                        Text(
+                        RomulusDialogBodyText(
                             text = "Transfer progress: ${transfer.progressPercentLabel} " +
                                 "($transferSummary)"
                         )
@@ -193,32 +220,32 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
             },
             confirmButton = {
                 TextButton(onClick = viewModel::dismissDetails) {
-                    Text("Close")
+                    RomulusDialogActionText("Close")
                 }
             }
         )
     }
 
     state.clearHistoryDialog?.let { dialog ->
-        AlertDialog(
+        RomulusAlertDialog(
             onDismissRequest = viewModel::dismissClearHistory,
-            title = { Text("Clear history") },
+            title = { RomulusDialogTitle("Clear history") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Hide completed and cancelled downloads from the list?")
+                    RomulusDialogBodyText("Hide completed and cancelled downloads from the list?")
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Include failed")
+                        RomulusDialogBodyText("Include failed")
                         Checkbox(
                             checked = dialog.includeFailed,
                             onCheckedChange = viewModel::updateClearHistoryIncludeFailed
                         )
                     }
                     dialog.errorMessage?.let { message ->
-                        Text(
+                        RomulusDialogBodyText(
                             text = message,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -229,12 +256,12 @@ fun DownloadsScreen(viewModel: DownloadsViewModel, modifier: Modifier = Modifier
                 TextButton(
                     onClick = { viewModel.confirmClearHistory(dialog.includeFailed) }
                 ) {
-                    Text("Clear")
+                    RomulusDialogActionText("Clear")
                 }
             },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissClearHistory) {
-                    Text("Cancel")
+                    RomulusDialogActionText("Cancel")
                 }
             }
         )
@@ -258,14 +285,17 @@ private fun DownloadRow(
                 text = row.originalDisplayName,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.titleSmall
             )
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    modifier = Modifier.size(24.dp),
+                RomulusIconButton(
+                    modifier = Modifier.size(28.dp),
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    outlined = false,
                     onClick = onOpenDetails
                 ) {
                     Icon(
@@ -311,8 +341,8 @@ private fun DownloadRow(
                 .align(Alignment.CenterVertically),
             contentAlignment = Alignment.Center
         ) {
-            IconButton(
-                modifier = Modifier.size(24.dp),
+            RomulusIconButton(
+                modifier = Modifier.size(28.dp),
                 onClick = { menuExpanded = true }
             ) {
                 Icon(
@@ -322,11 +352,23 @@ private fun DownloadRow(
             }
             DropdownMenu(
                 expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false }
+                onDismissRequest = { menuExpanded = false },
+                containerColor = warmOverlayColor(),
+                tonalElevation = 4.dp,
+                shadowElevation = 6.dp,
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                )
             ) {
                 orderedActions(row.allowedActions).forEach { action ->
                     DropdownMenuItem(
-                        text = { Text(action.label) },
+                        text = {
+                            Text(
+                                text = action.label,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
                         onClick = {
                             menuExpanded = false
                             onAction(action.toCommand(row.taskId))
@@ -345,26 +387,28 @@ private fun StatusTag(label: String, state: QueuePresentationState) {
         QueuePresentationState.FAILED,
         QueuePresentationState.CANCELLED -> MaterialTheme.colorScheme.errorContainer
         QueuePresentationState.RUNNING,
-        QueuePresentationState.PREPARING -> MaterialTheme.colorScheme.secondaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
+        QueuePresentationState.PREPARING -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.outline
     }
     val contentColor = when (state) {
         QueuePresentationState.COMPLETED -> MaterialTheme.colorScheme.onPrimaryContainer
         QueuePresentationState.FAILED,
         QueuePresentationState.CANCELLED -> MaterialTheme.colorScheme.onErrorContainer
         QueuePresentationState.RUNNING,
-        QueuePresentationState.PREPARING -> MaterialTheme.colorScheme.onSecondaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+        QueuePresentationState.PREPARING -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
     Surface(
         color = containerColor,
         contentColor = contentColor,
-        shape = MaterialTheme.shapes.small
+        shape = MaterialTheme.shapes.medium
     ) {
         Text(
             text = label,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 3.dp),
             style = MaterialTheme.typography.labelSmall,
             textAlign = TextAlign.Center
         )

@@ -1,9 +1,10 @@
-@file:Suppress("LongMethod", "ViewModelInjection")
+@file:Suppress("CyclomaticComplexMethod", "LongMethod", "ViewModelInjection")
 
 package com.romulus.mobile.ui.shell
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -45,6 +48,7 @@ import com.romulus.mobile.diagnostics.DiagnosticsFacade
 import com.romulus.mobile.downloads.DownloadsFacade
 import com.romulus.mobile.realdebrid.RealDebridFacade
 import com.romulus.mobile.source.SourceFacade
+import com.romulus.mobile.ui.components.RomulusPanel
 import com.romulus.mobile.ui.downloads.DownloadsScreen
 import com.romulus.mobile.ui.downloads.DownloadsViewModel
 import com.romulus.mobile.ui.files.FilesRouteArgs
@@ -57,6 +61,9 @@ import com.romulus.mobile.ui.settings.SettingsViewModel
 import com.romulus.mobile.ui.setup.SetupScreen
 import com.romulus.mobile.ui.setup.SetupViewModel
 import kotlinx.coroutines.flow.StateFlow
+
+private const val DARK_NAV_MIX = 0.68f
+private const val LIGHT_NAV_MIX = 0.2f
 
 @Suppress("LongParameterList", "ParameterNaming")
 @Composable
@@ -121,66 +128,111 @@ fun ShellScaffold(
             BackHandler(enabled = route == ShellRoute.Downloads || route == ShellRoute.Settings) {
                 shellNavigator.selectTab(ShellRoute.Home)
             }
+            val darkTheme = isSystemInDarkTheme()
+            val navContainerColor = if (darkTheme) {
+                lerp(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    MaterialTheme.colorScheme.background,
+                    DARK_NAV_MIX
+                )
+            } else {
+                lerp(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    MaterialTheme.colorScheme.background,
+                    LIGHT_NAV_MIX
+                )
+            }
             Scaffold(
                 modifier = modifier,
                 bottomBar = {
-                    NavigationBar(
-                        modifier = Modifier.padding(bottom = 4.dp),
-                        windowInsets = NavigationBarDefaults.windowInsets.only(
-                            WindowInsetsSides.Horizontal
-                        )
-                    ) {
-                        NavigationBarItem(
-                            selected = route.isHomeLike(),
-                            onClick = { shellNavigator.selectTab(ShellRoute.Home) },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Filled.Home,
-                                    contentDescription = "Home",
-                                    modifier = Modifier.size(20.dp)
+                    Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        RomulusPanel(
+                            containerColor = navContainerColor,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            borderColor = MaterialTheme.colorScheme.outline
+                        ) {
+                            val itemColors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = if (darkTheme) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                },
+                                selectedTextColor = if (darkTheme) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                },
+                                indicatorColor = if (darkTheme) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                },
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            NavigationBar(
+                                containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                tonalElevation = 0.dp,
+                                windowInsets = NavigationBarDefaults.windowInsets.only(
+                                    WindowInsetsSides.Horizontal
                                 )
-                            },
-                            label = {
-                                Text(
-                                    text = "Home",
-                                    style = MaterialTheme.typography.labelSmall
+                            ) {
+                                NavigationBarItem(
+                                    selected = route.isHomeLike(),
+                                    onClick = { shellNavigator.selectTab(ShellRoute.Home) },
+                                    colors = itemColors,
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.Filled.Home,
+                                            contentDescription = "Home",
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = "Home",
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
+                                )
+                                NavigationBarItem(
+                                    selected = route == ShellRoute.Downloads,
+                                    onClick = { shellNavigator.selectTab(ShellRoute.Downloads) },
+                                    colors = itemColors,
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.Filled.Download,
+                                            contentDescription = "Downloads",
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = "Downloads",
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
+                                )
+                                NavigationBarItem(
+                                    selected = route == ShellRoute.Settings,
+                                    onClick = { shellNavigator.selectTab(ShellRoute.Settings) },
+                                    colors = itemColors,
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.Filled.Settings,
+                                            contentDescription = "Settings",
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = "Settings",
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
                                 )
                             }
-                        )
-                        NavigationBarItem(
-                            selected = route == ShellRoute.Downloads,
-                            onClick = { shellNavigator.selectTab(ShellRoute.Downloads) },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Filled.Download,
-                                    contentDescription = "Downloads",
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = "Downloads",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        )
-                        NavigationBarItem(
-                            selected = route == ShellRoute.Settings,
-                            onClick = { shellNavigator.selectTab(ShellRoute.Settings) },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Filled.Settings,
-                                    contentDescription = "Settings",
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = "Settings",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        )
+                        }
                     }
                 }
             ) { innerPadding ->

@@ -24,15 +24,12 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,12 +43,22 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.romulus.mobile.downloads.queue.EnqueueResult
+import com.romulus.mobile.ui.components.RomulusAlertDialog
+import com.romulus.mobile.ui.components.RomulusButtonText
+import com.romulus.mobile.ui.components.RomulusDialogActionText
+import com.romulus.mobile.ui.components.RomulusDialogBodyText
+import com.romulus.mobile.ui.components.RomulusDialogTitle
+import com.romulus.mobile.ui.components.RomulusFieldLabel
+import com.romulus.mobile.ui.components.RomulusIconButton
+import com.romulus.mobile.ui.components.RomulusPanel
 import com.romulus.mobile.ui.components.TableDataRow
 import com.romulus.mobile.ui.components.TableHeaderRow
+import com.romulus.mobile.ui.components.romulusSwitchColors
 import com.romulus.mobile.ui.formatByteCountOrUnknown
 import com.romulus.mobile.ui.layout.ResponsiveScreenContainer
 import kotlinx.coroutines.launch
@@ -83,20 +90,29 @@ fun FilesScreen(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = state.entryDisplayName,
-                    style = MaterialTheme.typography.titleMedium
+                    modifier = Modifier
+                        .weight(1f)
+                        .widthIn(max = 280.dp)
+                        .padding(end = 8.dp),
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (state.resolverError != null) {
-                        IconButton(
-                            modifier = Modifier.size(30.dp),
+                        RomulusIconButton(
+                            modifier = Modifier.size(34.dp),
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            borderColor = MaterialTheme.colorScheme.error,
                             onClick = { warningDialogOpen = true }
                         ) {
                             Icon(
@@ -106,8 +122,8 @@ fun FilesScreen(
                             )
                         }
                     }
-                    IconButton(
-                        modifier = Modifier.size(30.dp),
+                    RomulusIconButton(
+                        modifier = Modifier.size(34.dp),
                         onClick = { searchDialogOpen = true }
                     ) {
                         Icon(
@@ -115,8 +131,8 @@ fun FilesScreen(
                             contentDescription = "Search files"
                         )
                     }
-                    IconButton(
-                        modifier = Modifier.size(30.dp),
+                    RomulusIconButton(
+                        modifier = Modifier.size(34.dp),
                         onClick = { preferencesDialogOpen = true }
                     ) {
                         Icon(
@@ -124,9 +140,10 @@ fun FilesScreen(
                             contentDescription = "File preferences"
                         )
                     }
-                    IconButton(
-                        modifier = Modifier.size(30.dp),
+                    RomulusIconButton(
+                        modifier = Modifier.size(38.dp),
                         enabled = state.selectedIds.isNotEmpty(),
+                        prominent = true,
                         onClick = {
                             scope.launch {
                                 when (val result = viewModel.queueSelected()) {
@@ -189,7 +206,7 @@ fun FilesScreen(
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(onClick = viewModel::retryResolve) {
-                        Text("Retry")
+                        RomulusButtonText("Retry")
                     }
                 }
             }
@@ -210,8 +227,11 @@ fun FilesScreen(
                             text = "Select",
                             style = MaterialTheme.typography.labelMedium
                         )
-                        IconButton(
-                            modifier = Modifier.size(26.dp),
+                        RomulusIconButton(
+                            modifier = Modifier.size(30.dp),
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            outlined = false,
                             onClick = {
                                 val visibleIds = state.rows.map { row -> row.itemId }
                                 val allVisibleSelected = visibleIds.isNotEmpty() &&
@@ -275,14 +295,17 @@ fun FilesScreen(
                                     text = row.originalDisplayName,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.titleSmall
                                 )
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    IconButton(
-                                        modifier = Modifier.size(24.dp),
+                                    RomulusIconButton(
+                                        modifier = Modifier.size(28.dp),
+                                        containerColor = Color.Transparent,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        outlined = false,
                                         onClick = { detailItemId = row.itemId.value }
                                     ) {
                                         Icon(
@@ -321,21 +344,21 @@ fun FilesScreen(
     }
 
     if (searchDialogOpen) {
-        AlertDialog(
+        RomulusAlertDialog(
             onDismissRequest = { searchDialogOpen = false },
-            title = { Text("Search files") },
+            title = { RomulusDialogTitle("Search files") },
             text = {
                 OutlinedTextField(
                     value = state.searchQuery,
                     onValueChange = viewModel::updateSearchQuery,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Find file") },
+                    label = { RomulusFieldLabel("Find file") },
                     singleLine = true
                 )
             },
             confirmButton = {
                 TextButton(onClick = { searchDialogOpen = false }) {
-                    Text("Done")
+                    RomulusDialogActionText("Done")
                 }
             },
             dismissButton = {
@@ -345,16 +368,16 @@ fun FilesScreen(
                         searchDialogOpen = false
                     }
                 ) {
-                    Text("Clear")
+                    RomulusDialogActionText("Clear")
                 }
             }
         )
     }
 
     if (preferencesDialogOpen) {
-        AlertDialog(
+        RomulusAlertDialog(
             onDismissRequest = { preferencesDialogOpen = false },
-            title = { Text("File preferences") },
+            title = { RomulusDialogTitle("File preferences") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (state.preferences.renameAvailable) {
@@ -400,46 +423,48 @@ fun FilesScreen(
                         !state.preferences.unarchiveAvailable &&
                         !state.preferences.recursiveUnarchiveAvailable
                     ) {
-                        Text("No configurable file preferences are available for this source.")
+                        RomulusDialogBodyText(
+                            "No configurable file preferences are available for this source."
+                        )
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = { preferencesDialogOpen = false }) {
-                    Text("Close")
+                    RomulusDialogActionText("Close")
                 }
             }
         )
     }
 
     if (warningDialogOpen && state.resolverError != null) {
-        AlertDialog(
+        RomulusAlertDialog(
             onDismissRequest = { warningDialogOpen = false },
-            title = { Text("Resolution warning") },
-            text = { Text(state.resolverError.orEmpty()) },
+            title = { RomulusDialogTitle("Resolution warning") },
+            text = { RomulusDialogBodyText(state.resolverError.orEmpty()) },
             confirmButton = {
                 TextButton(onClick = { warningDialogOpen = false }) {
-                    Text("Close")
+                    RomulusDialogActionText("Close")
                 }
             }
         )
     }
 
     selectedDetail?.let { row ->
-        AlertDialog(
+        RomulusAlertDialog(
             onDismissRequest = { detailItemId = null },
-            title = { Text(row.originalDisplayName) },
+            title = { RomulusDialogTitle(row.originalDisplayName) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Original name: ${row.originalDisplayName}")
-                    Text("Size: ${row.sizeBytes.formatByteCountOrUnknown()}")
-                    Text("Part: ${row.partLabel ?: "N/A"}")
-                    Text("Torrent file id: ${row.providerFileId ?: "N/A"}")
+                    RomulusDialogBodyText("Original name: ${row.originalDisplayName}")
+                    RomulusDialogBodyText("Size: ${row.sizeBytes.formatByteCountOrUnknown()}")
+                    RomulusDialogBodyText("Part: ${row.partLabel ?: "N/A"}")
+                    RomulusDialogBodyText("Torrent file id: ${row.providerFileId ?: "N/A"}")
                 }
             },
             confirmButton = {
                 TextButton(onClick = { detailItemId = null }) {
-                    Text("Close")
+                    RomulusDialogActionText("Close")
                 }
             }
         )
@@ -486,13 +511,11 @@ private fun FilesStateCard(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        Surface(
+        RomulusPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 460.dp),
-            color = MaterialTheme.colorScheme.surface,
-            shape = MaterialTheme.shapes.large,
-            tonalElevation = 1.dp
+            containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
@@ -502,7 +525,8 @@ private fun FilesStateCard(
                 content()
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.secondary
                 )
                 Text(
                     text = body,
@@ -533,11 +557,15 @@ private fun PreferenceToggleRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium
+        )
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            enabled = enabled
+            enabled = enabled,
+            colors = romulusSwitchColors()
         )
     }
 }

@@ -41,6 +41,7 @@ just generate-icon
 Defaults:
 
 - source artwork: `artwork/ROMULUS_TRANSPARENT.png`
+- icon and splash background: `@color/romulus_brand_background`
 - preview output: `artwork/generated/icon-preview-1024.png`
 - round preview output: `artwork/generated/icon-preview-round-1024.png`
 - splash preview output: `artwork/generated/icon-preview-splash-1024.png`
@@ -51,6 +52,38 @@ Optional overrides:
 
 ```bash
 just generate-icon source=artwork/ROMULUS_TRANSPARENT.png background=#F3B51D padding=72 round_padding=144 splash_padding=220
+```
+
+## Theme Colors
+
+The runtime palette and splash/icon brand background are centralized in:
+
+- `app/src/main/res/values/colors.xml`
+- `app/src/main/res/values-night/colors.xml`
+
+Compose reads the Material color roles from those resources, and `just generate-icon` uses `romulus_brand_background` by default so icon, splash, and in-app branding stay aligned.
+
+The current visual direction is documented in `docs/design/aged-brass-ui.md`.
+
+## Device Screenshot Capture
+
+Capture the agreed UI review set from a connected adb device:
+
+```bash
+just capture-ui-screenshots
+```
+
+- Output root: `screenshots/`
+- Session output: `screenshots/YYYY-MM-DD_HH-MM/` using local time
+- File layout: `screenshots/<session>/<theme>/<screen>/<variant>.png`
+- Saved images: each capture is resized to 50% of the device screenshot dimensions before being written to disk
+- Device selection: uses `ANDROID_SERIAL` when set, otherwise requires exactly one connected adb device
+- Flow: the script prompts before running `just clear-app-data` for each Setup capture, then prints each page/modal instruction, waits for Enter to capture, and supports skip or retake
+
+Optional named session:
+
+```bash
+just capture-ui-screenshots session=aged-brass-pass-1
 ```
 
 ## Runtime Flow

@@ -8,18 +8,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +37,15 @@ import com.romulus.mobile.downloads.config.DownloadLimits
 import com.romulus.mobile.downloads.config.DownloadSettingsDraft
 import com.romulus.mobile.source.ingest.AcceptSourceCommand
 import com.romulus.mobile.source.ingest.SourceMode
+import com.romulus.mobile.ui.components.RomulusAlertDialog
+import com.romulus.mobile.ui.components.RomulusButtonText
+import com.romulus.mobile.ui.components.RomulusDialogActionText
+import com.romulus.mobile.ui.components.RomulusDialogBodyText
+import com.romulus.mobile.ui.components.RomulusDialogTitle
+import com.romulus.mobile.ui.components.RomulusFieldLabel
+import com.romulus.mobile.ui.components.RomulusSectionCard
+import com.romulus.mobile.ui.components.romulusButtonColors
+import com.romulus.mobile.ui.components.romulusSwitchColors
 import com.romulus.mobile.ui.layout.ResponsiveScreenContainer
 import java.time.Instant
 import kotlin.math.roundToInt
@@ -176,22 +181,24 @@ fun SettingsScreen(
         ) {
             Text(
                 text = "Settings",
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.headlineMedium
             )
 
             if (allSettingsLocked) {
                 Text(
                     text = "Settings are locked while downloads are active.",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
             } else if (repairMode) {
                 Text(
                     text = "Only the broken saved setting can be edited while downloads stay active.",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
             }
 
-            SectionCard(
+            RomulusSectionCard(
                 title = "API key",
                 description = "Credential used for Real-Debrid requests."
             ) {
@@ -210,21 +217,22 @@ fun SettingsScreen(
                         apiKeyDraft = it
                         viewModel.clearFeedback()
                     },
-                    label = { Text("API key") },
+                    label = { RomulusFieldLabel("API key") },
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
                     enabled = state.lockState.tokenEditable,
                     singleLine = true
                 )
                 Button(
+                    colors = romulusButtonColors(),
                     enabled = state.lockState.tokenEditable && apiKeyDraft.isNotBlank(),
                     onClick = { viewModel.saveApiKey(apiKeyDraft) }
                 ) {
-                    Text("Save API key")
+                    RomulusButtonText("Save API key")
                 }
             }
 
-            SectionCard(
+            RomulusSectionCard(
                 title = "Source",
                 description = "Choose URL or local file for the standard runtime."
             ) {
@@ -263,12 +271,13 @@ fun SettingsScreen(
                             sourceValueDraft = it
                             viewModel.clearFeedback()
                         },
-                        label = { Text("Source URL") },
+                        label = { RomulusFieldLabel("Source URL") },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = state.lockState.sourceEditable,
                         singleLine = true
                     )
                     Button(
+                        colors = romulusButtonColors(),
                         enabled = state.lockState.sourceEditable && sourceValueDraft.isNotBlank(),
                         onClick = {
                             viewModel.saveSource(
@@ -280,10 +289,11 @@ fun SettingsScreen(
                             )
                         }
                     ) {
-                        Text("Save source URL")
+                        RomulusButtonText("Save source URL")
                     }
                 } else {
                     Button(
+                        colors = romulusButtonColors(),
                         enabled = state.lockState.sourceEditable,
                         onClick = {
                             sourceDocumentLauncher.launch(
@@ -291,12 +301,12 @@ fun SettingsScreen(
                             )
                         }
                     ) {
-                        Text("Pick local source file")
+                        RomulusButtonText("Pick local source file")
                     }
                 }
             }
 
-            SectionCard(
+            RomulusSectionCard(
                 title = "Download directory",
                 description = "Storage Access Framework directory used for final outputs."
             ) {
@@ -306,14 +316,15 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Button(
+                    colors = romulusButtonColors(),
                     enabled = state.lockState.downloadDirectoryEditable,
                     onClick = { outputDirectoryLauncher.launch(null) }
                 ) {
-                    Text("Select download directory")
+                    RomulusButtonText("Select download directory")
                 }
             }
 
-            SectionCard(
+            RomulusSectionCard(
                 title = "Simultaneous downloads",
                 description = "Choose how many downloads run at the same time."
             ) {
@@ -335,6 +346,7 @@ fun SettingsScreen(
                     enabled = state.lockState.concurrencyEditable
                 )
                 Button(
+                    colors = romulusButtonColors(),
                     enabled = state.lockState.concurrencyEditable,
                     onClick = {
                         val concurrency = concurrencyDraft.roundToInt()
@@ -364,11 +376,11 @@ fun SettingsScreen(
                         }
                     }
                 ) {
-                    Text("Save concurrency")
+                    RomulusButtonText("Save concurrency")
                 }
             }
 
-            SectionCard(
+            RomulusSectionCard(
                 title = "Diagnostics",
                 description = "Manage local diagnostics capture and exported support bundles."
             ) {
@@ -377,24 +389,32 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Enable diagnostics")
+                    Text(
+                        text = "Enable diagnostics",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                     Switch(
                         checked = state.diagnosticsSettings.enabled,
-                        onCheckedChange = viewModel::setDiagnosticsEnabled
+                        onCheckedChange = viewModel::setDiagnosticsEnabled,
+                        colors = romulusSwitchColors()
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { clearDiagnosticsDialogOpen = true }) {
-                        Text("Clear diagnostics")
+                    Button(
+                        onClick = { clearDiagnosticsDialogOpen = true },
+                        colors = romulusButtonColors()
+                    ) {
+                        RomulusButtonText("Clear diagnostics")
                     }
                     Button(
+                        colors = romulusButtonColors(),
                         onClick = {
                             val targetLabel = buildDiagnosticsExportFileName()
                             pendingDiagnosticsExportLabel = targetLabel
                             diagnosticsExportLauncher.launch(targetLabel)
                         }
                     ) {
-                        Text("Export")
+                        RomulusButtonText("Export")
                     }
                 }
             }
@@ -402,6 +422,7 @@ fun SettingsScreen(
             state.feedbackMessage?.let { message ->
                 Text(
                     text = message,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
             }
@@ -409,10 +430,10 @@ fun SettingsScreen(
     }
 
     if (clearDiagnosticsDialogOpen) {
-        AlertDialog(
+        RomulusAlertDialog(
             onDismissRequest = { clearDiagnosticsDialogOpen = false },
-            title = { Text("Clear diagnostics") },
-            text = { Text("Delete stored diagnostics data?") },
+            title = { RomulusDialogTitle("Clear diagnostics") },
+            text = { RomulusDialogBodyText("Delete stored diagnostics data?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -420,12 +441,12 @@ fun SettingsScreen(
                         viewModel.clearDiagnostics()
                     }
                 ) {
-                    Text("Clear")
+                    RomulusDialogActionText("Clear")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { clearDiagnosticsDialogOpen = false }) {
-                    Text("Cancel")
+                    RomulusDialogActionText("Cancel")
                 }
             }
         )
@@ -458,34 +479,9 @@ private fun SourceModeOption(
             },
             enabled = enabled
         )
-        Text(label)
-    }
-}
-
-@Composable
-private fun SectionCard(
-    title: String,
-    description: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 1.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            content()
-        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }

@@ -39,33 +39,33 @@ fun rememberResponsiveMetrics(): ResponsiveMetrics {
     return when {
         widthDp >= 960 -> ResponsiveMetrics(
             horizontalPadding = 40.dp,
-            verticalPadding = 32.dp,
-            sectionSpacing = 24.dp,
+            verticalPadding = 34.dp,
+            sectionSpacing = 28.dp,
             contentSpacing = 20.dp,
             maxContentWidth = 900.dp
         )
 
         widthDp >= 720 -> ResponsiveMetrics(
             horizontalPadding = 32.dp,
-            verticalPadding = 24.dp,
-            sectionSpacing = 20.dp,
+            verticalPadding = 26.dp,
+            sectionSpacing = 24.dp,
             contentSpacing = 16.dp,
             maxContentWidth = 760.dp
         )
 
         widthDp >= 520 -> ResponsiveMetrics(
             horizontalPadding = 24.dp,
-            verticalPadding = 20.dp,
-            sectionSpacing = 16.dp,
+            verticalPadding = 22.dp,
+            sectionSpacing = 18.dp,
             contentSpacing = 14.dp,
             maxContentWidth = 640.dp
         )
 
         else -> ResponsiveMetrics(
-            horizontalPadding = 16.dp,
-            verticalPadding = 16.dp,
-            sectionSpacing = 12.dp,
-            contentSpacing = 10.dp,
+            horizontalPadding = 18.dp,
+            verticalPadding = 18.dp,
+            sectionSpacing = 14.dp,
+            contentSpacing = 12.dp,
             maxContentWidth = 480.dp
         )
     }
@@ -82,7 +82,7 @@ fun ResponsiveScreenContainer(
     content: @Composable ColumnScope.(ResponsiveMetrics) -> Unit
 ) {
     val verticalPadding = if (compactVerticalPadding) {
-        6.dp
+        8.dp
     } else {
         metrics.verticalPadding
     }

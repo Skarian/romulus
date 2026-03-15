@@ -23,6 +23,7 @@ It does not try to freeze one exact Compose implementation.
 - Observe owner-backed state and map it into presentation models.
 - Preserve screen-local state across configuration change through lifecycle-aware view models and saved state.
 - Preserve the current app's proven visual language by default.
+- Own the runtime Material theme through shared color resources and `ui/theme`, not through screen-local color constants.
 
 ## Explicit Non-Responsibilities
 

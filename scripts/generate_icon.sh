@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 source_image="${repo_root}/artwork/ROMULUS_TRANSPARENT.png"
-background_color="#F3B51D"
+background_color="$(sed -nE 's:.*name="romulus_brand_background">(#[0-9A-Fa-f]{6,8})<.*:\1:p' "${repo_root}/app/src/main/res/values/colors.xml" | head -n 1)"
 padding=72
 round_padding=144
 splash_padding=220
@@ -17,7 +17,9 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --background-color)
-      background_color="$2"
+      if [[ -n "$2" ]]; then
+        background_color="$2"
+      fi
       shift 2
       ;;
     --padding)
@@ -45,6 +47,11 @@ done
 
 if [[ ! -f "${source_image}" ]]; then
   echo "Source image not found: ${source_image}" >&2
+  exit 1
+fi
+
+if [[ -z "${background_color}" ]]; then
+  echo "Unable to resolve romulus_brand_background from app/src/main/res/values/colors.xml" >&2
   exit 1
 fi
 

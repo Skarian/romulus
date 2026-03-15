@@ -7,17 +7,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,6 +29,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.romulus.mobile.app.platform.PersistedUriGrant
 import com.romulus.mobile.source.ingest.SourceMode
+import com.romulus.mobile.ui.components.RomulusButtonText
+import com.romulus.mobile.ui.components.RomulusFieldLabel
+import com.romulus.mobile.ui.components.RomulusSectionCard
+import com.romulus.mobile.ui.components.romulusButtonColors
+import com.romulus.mobile.ui.components.romulusPrimaryButtonColors
 import com.romulus.mobile.ui.layout.ResponsiveScreenContainer
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -117,7 +118,7 @@ fun SetupScreen(
                 )
             }
 
-            SetupSectionCard(
+            RomulusSectionCard(
                 title = "API key",
                 description = "Credential used for Real-Debrid requests."
             ) {
@@ -125,7 +126,7 @@ fun SetupScreen(
                     value = state.apiKeyDraft,
                     onValueChange = viewModel::updateApiKey,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Real-Debrid API key") },
+                    label = { RomulusFieldLabel("Real-Debrid API key") },
                     visualTransformation = PasswordVisualTransformation(),
                     enabled = !state.isSaving,
                     singleLine = true
@@ -134,12 +135,12 @@ fun SetupScreen(
                     enabled = !state.isSaving,
                     onClick = { uriHandler.openUri("https://real-debrid.com/apitoken") }
                 ) {
-                    Text("Get API token")
+                    RomulusButtonText("Get API token")
                 }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(metrics.contentSpacing)) {
-                SetupSectionCard(
+                RomulusSectionCard(
                     title = "Source",
                     description = "Choose a URL source or local JSON file."
                 ) {
@@ -160,12 +161,13 @@ fun SetupScreen(
                             value = state.sourceValueDraft,
                             onValueChange = viewModel::updateSourceValue,
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Source URL") },
+                            label = { RomulusFieldLabel("Source URL") },
                             enabled = !state.isSaving,
                             singleLine = true
                         )
                     } else {
                         Button(
+                            colors = romulusButtonColors(),
                             enabled = !state.isSaving,
                             onClick = {
                                 sourceDocumentLauncher.launch(
@@ -173,7 +175,7 @@ fun SetupScreen(
                                 )
                             }
                         ) {
-                            Text("Pick local JSON file")
+                            RomulusButtonText("Pick local JSON file")
                         }
                         Text(
                             text = state.sourceDocumentUri?.toString()
@@ -184,15 +186,16 @@ fun SetupScreen(
                     }
                 }
 
-                SetupSectionCard(
+                RomulusSectionCard(
                     title = "Download directory",
                     description = "Select where final files should be written."
                 ) {
                     Button(
+                        colors = romulusButtonColors(),
                         enabled = !state.isSaving,
                         onClick = { outputDirectoryLauncher.launch(null) }
                     ) {
-                        Text("Pick download directory")
+                        RomulusButtonText("Pick download directory")
                     }
                     Text(
                         text = state.outputDirectoryUri?.toString()
@@ -209,16 +212,11 @@ fun SetupScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Button(
+                    colors = romulusPrimaryButtonColors(),
                     enabled = submitEnabled,
-                    onClick = viewModel::submit,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiary,
-                        contentColor = MaterialTheme.colorScheme.onTertiary,
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    onClick = viewModel::submit
                 ) {
-                    Text(if (state.isSaving) "Saving..." else "Complete setup")
+                    RomulusButtonText(if (state.isSaving) "Saving..." else "Complete setup")
                 }
 
                 state.errorMessage?.let { message ->
@@ -249,38 +247,10 @@ private fun SourceModeOption(
             onClick = onSelect,
             enabled = enabled
         )
-        Text(text = label)
-    }
-}
-
-@Composable
-private fun SetupSectionCard(
-    title: String,
-    description: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 1.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            content()
-        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
 

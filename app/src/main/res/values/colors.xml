@@ -1,0 +1,31 @@
+<resources>
+    <color name="romulus_brand_background">#F3B51D</color>
+
+    <color name="romulus_primary">#C69224</color>
+    <color name="romulus_on_primary">#2C1D05</color>
+    <color name="romulus_primary_container">#E5D8BC</color>
+    <color name="romulus_on_primary_container">#4A320C</color>
+
+    <color name="romulus_secondary">#A46343</color>
+    <color name="romulus_on_secondary">#FFF7F2</color>
+    <color name="romulus_secondary_container">#E6C3B6</color>
+    <color name="romulus_on_secondary_container">#4C2718</color>
+
+    <color name="romulus_tertiary">#6A7354</color>
+    <color name="romulus_on_tertiary">#F8F4E8</color>
+    <color name="romulus_tertiary_container">#D5DABD</color>
+    <color name="romulus_on_tertiary_container">#313825</color>
+
+    <color name="romulus_error">#A8412D</color>
+    <color name="romulus_on_error">#FFFFFF</color>
+    <color name="romulus_error_container">#F3CEC4</color>
+    <color name="romulus_on_error_container">#4A150C</color>
+
+    <color name="romulus_background">#F5F0E8</color>
+    <color name="romulus_on_background">#33271D</color>
+    <color name="romulus_surface">#FCF7EF</color>
+    <color name="romulus_on_surface">#33271D</color>
+    <color name="romulus_surface_variant">#E4DBCF</color>
+    <color name="romulus_on_surface_variant">#685E53</color>
+    <color name="romulus_outline">#A89C8C</color>
+</resources>
