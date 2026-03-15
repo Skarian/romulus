@@ -106,6 +106,7 @@ dependencies {
     detektPlugins("io.nlopez.compose.rules:detekt:0.5.0")
 
     implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.activity:activity-compose:1.12.0")

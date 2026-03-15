@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.SideEffect
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.romulus.mobile.app.RomulusApplication
 import com.romulus.mobile.app.shell.ShellRoute
 import com.romulus.mobile.app.startup.StartupBootstrapRequest
@@ -27,6 +28,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         startupSessionViewModel.startOnce(

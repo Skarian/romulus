@@ -30,6 +30,29 @@ Standalone Android app for the Real-Debrid download manager.
 
 `installDebug` fails with `No connected devices!` if no emulator/phone is attached.
 
+## Icon Pipeline
+
+Generate Android launcher icons from the transparent artwork source:
+
+```bash
+just generate-icon
+```
+
+Defaults:
+
+- source artwork: `artwork/ROMULUS_TRANSPARENT.png`
+- preview output: `artwork/generated/icon-preview-1024.png`
+- round preview output: `artwork/generated/icon-preview-round-1024.png`
+- splash preview output: `artwork/generated/icon-preview-splash-1024.png`
+- launcher assets: `app/src/main/res/mipmap-*/ic_launcher.png`
+- round launcher assets: `app/src/main/res/mipmap-*/ic_launcher_round.png`
+
+Optional overrides:
+
+```bash
+just generate-icon source=artwork/ROMULUS_TRANSPARENT.png background=#F3B51D padding=72 round_padding=144 splash_padding=220
+```
+
 ## Runtime Flow
 
 The app is setup-gated. Before Home/Downloads/Settings are shown, setup must complete:

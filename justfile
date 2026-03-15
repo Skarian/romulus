@@ -12,3 +12,12 @@ push-sample file=sample_file:
 
 clear-app-data:
     adb shell pm clear "{{app_id}}"
+
+generate-icon source="artwork/ROMULUS_TRANSPARENT.png" background="#F3B51D" padding="72" round_padding="144" splash_padding="220":
+    ./scripts/generate_icon.sh \
+        --source "{{source}}" \
+        --background-color "{{background}}" \
+        --padding "{{padding}}" \
+        --round-padding "{{round_padding}}" \
+        --splash-padding "{{splash_padding}}" \
+        --preview-dir artwork/generated
