@@ -314,8 +314,8 @@ fun SettingsScreen(
             }
 
             SectionCard(
-                title = "Download behavior",
-                description = "Queue concurrency for the standard download flow."
+                title = "Simultaneous downloads",
+                description = "Choose how many downloads run at the same time."
             ) {
                 val minConcurrency = DownloadLimits.MIN_CONCURRENCY.toFloat()
                 val maxConcurrency = DownloadLimits.MAX_CONCURRENCY.toFloat()

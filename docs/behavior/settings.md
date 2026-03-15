@@ -24,25 +24,26 @@
 7. Concurrency must be between `1` and `50`.
 8. Fresh setup defaults concurrency to `5`.
 9. Concurrency means the maximum number of simultaneous active queue attempts; when one active attempt finishes, the next queued attempt may start immediately without waiting for the rest of the active set to finish.
-10. Source mode supports URL and file.
-11. Settings does not expose manual source refresh.
-12. `Active downloads` means active states from [`status-model.md`](status-model.md).
-13. When Home is in the invalid-settings error state, Settings is the place where the user fixes the broken saved setting; shell visibility behavior follows [`app-shell.md`](app-shell.md).
-14. Settings includes `Diagnostics` controls:
+10. Settings presents the concurrency control as `Simultaneous downloads` with plain-language copy that explains how many downloads run at the same time.
+11. Source mode supports URL and file.
+12. Settings does not expose manual source refresh.
+13. `Active downloads` means active states from [`status-model.md`](status-model.md).
+14. When Home is in the invalid-settings error state, Settings is the place where the user fixes the broken saved setting; shell visibility behavior follows [`app-shell.md`](app-shell.md).
+15. Settings includes `Diagnostics` controls:
    - `Enable diagnostics` toggle,
    - `Clear diagnostics` action,
    - `Export` action.
-15. `Enable diagnostics` takes effect immediately and persists as a settings value; persistence rules follow [`persistence.md`](persistence.md).
-16. `Clear diagnostics` requires confirmation before changes are applied.
-17. Diagnostics actions remain available while downloads are active.
-18. `Clear diagnostics` and `Export` show toast feedback on success or failure.
-19. `Export` opens the Android system document picker so the user chooses where the diagnostics zip will be saved.
-20. Diagnostics data, retention, and export semantics follow [`diagnostics.md`](diagnostics.md).
-21. Saving an API key performs live Real-Debrid validation.
-22. API key save succeeds only when the new key validates successfully and replaces the prior saved key.
-23. If API key validation fails, the previously saved valid key remains unchanged.
-24. Cancelling source reselection, download-directory reselection, or diagnostics export destination selection leaves the previously saved values and retained diagnostics artifacts unchanged.
-25. When diagnostics is enabled, Settings events are captured:
+16. `Enable diagnostics` takes effect immediately and persists as a settings value; persistence rules follow [`persistence.md`](persistence.md).
+17. `Clear diagnostics` requires confirmation before changes are applied.
+18. Diagnostics actions remain available while downloads are active.
+19. `Clear diagnostics` and `Export` show toast feedback on success or failure.
+20. `Export` opens the Android system document picker so the user chooses where the diagnostics zip will be saved.
+21. Diagnostics data, retention, and export semantics follow [`diagnostics.md`](diagnostics.md).
+22. Saving an API key performs live Real-Debrid validation.
+23. API key save succeeds only when the new key validates successfully and replaces the prior saved key.
+24. If API key validation fails, the previously saved valid key remains unchanged.
+25. Cancelling source reselection, download-directory reselection, or diagnostics export destination selection leaves the previously saved values and retained diagnostics artifacts unchanged.
+26. When diagnostics is enabled, Settings events are captured:
    - settings edit and save attempts,
    - settings save outcomes,
    - diagnostics control actions and outcomes.
