@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.romulus.mobile.app.startup.BrokenSetting
 import com.romulus.mobile.app.startup.ShellReadiness
 import com.romulus.mobile.source.SourceFacade
+import com.romulus.mobile.source.snapshot.HomeSourceRowDetails
 import com.romulus.mobile.source.snapshot.HomeSourceState
 import com.romulus.mobile.source.snapshot.HomeSourceWarning
 import com.romulus.mobile.source.snapshot.SnapshotId
@@ -53,7 +54,7 @@ sealed interface HomeEffect {
 
 data class HomeRowModel(
     val displayName: String,
-    val folderContext: String,
+    val details: HomeSourceRowDetails,
     val routeArgs: FilesRouteArgs
 )
 
@@ -167,7 +168,7 @@ class HomeViewModel(
                     .map { row ->
                         HomeRowModel(
                             displayName = row.displayName,
-                            folderContext = row.folderContext,
+                            details = row.details,
                             routeArgs = FilesRouteArgs(
                                 snapshotId = homeState.snapshotId,
                                 entryId = row.entryId,

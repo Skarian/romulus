@@ -97,7 +97,19 @@ sealed interface HomeSourceWarning {
 data class HomeSourceRow(
     val entryId: SourceEntryId,
     val displayName: String,
-    val folderContext: String
+    val details: HomeSourceRowDetails
+)
+
+data class HomeSourceRowDetails(
+    val outputFolder: String,
+    val scopePath: String,
+    val includeNestedFiles: Boolean,
+    val torrentPartCount: Int,
+    val partLabels: List<String>,
+    val ignoreRuleCount: Int,
+    val renameAvailable: Boolean,
+    val unarchiveAvailable: Boolean,
+    val recursiveUnarchiveDefault: Boolean?
 )
 
 sealed interface SourceRefreshTrigger {

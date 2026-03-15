@@ -522,7 +522,19 @@ private fun SourceSnapshot.toHomeContent(
         HomeSourceRow(
             entryId = entry.entryId,
             displayName = entry.displayName,
-            folderContext = entry.subfolder
+            details = HomeSourceRowDetails(
+                outputFolder = entry.subfolder,
+                scopePath = entry.scope.normalizedPath,
+                includeNestedFiles = entry.scope.includeNestedFiles,
+                torrentPartCount = entry.torrents.size,
+                partLabels = entry.torrents.mapNotNull { torrent ->
+                    torrent.partLabel?.trim()?.takeIf(String::isNotEmpty)
+                },
+                ignoreRuleCount = entry.ignoreGlobs.size,
+                renameAvailable = entry.renameRule != null,
+                unarchiveAvailable = entry.unarchivePolicy != null,
+                recursiveUnarchiveDefault = entry.unarchivePolicy?.recursiveDefault
+            )
         )
     },
     warning = warning,
