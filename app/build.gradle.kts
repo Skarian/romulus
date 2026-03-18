@@ -9,6 +9,26 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+fun gradleStringConfig(name: String, envName: String): String? =
+    providers.gradleProperty(name).orNull?.takeIf(String::isNotBlank)
+        ?: providers.environmentVariable(envName).orNull?.takeIf(String::isNotBlank)
+
+fun gradleIntConfig(name: String, envName: String): Int? =
+    gradleStringConfig(name, envName)?.toIntOrNull()
+
+val configuredVersionCode = gradleIntConfig("romulusVersionCode", "ROMULUS_VERSION_CODE") ?: 1
+val configuredVersionName = gradleStringConfig("romulusVersionName", "ROMULUS_VERSION_NAME") ?: "1.0"
+val releaseSigningStoreFile = gradleStringConfig("romulusSigningStoreFile", "ROMULUS_SIGNING_STORE_FILE")
+val releaseSigningStorePassword = gradleStringConfig("romulusSigningStorePassword", "ROMULUS_SIGNING_STORE_PASSWORD")
+val releaseSigningKeyAlias = gradleStringConfig("romulusSigningKeyAlias", "ROMULUS_SIGNING_KEY_ALIAS")
+val releaseSigningKeyPassword = gradleStringConfig("romulusSigningKeyPassword", "ROMULUS_SIGNING_KEY_PASSWORD")
+val releaseSigningConfigured = listOf(
+    releaseSigningStoreFile,
+    releaseSigningStorePassword,
+    releaseSigningKeyAlias,
+    releaseSigningKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.romulus.mobile"
     compileSdk = 36
@@ -17,10 +37,21 @@ android {
         applicationId = "com.romulus.mobile"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = configuredVersionCode
+        versionName = configuredVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(releaseSigningStoreFile!!)
+                storePassword = releaseSigningStorePassword
+                keyAlias = releaseSigningKeyAlias
+                keyPassword = releaseSigningKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -30,6 +61,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
